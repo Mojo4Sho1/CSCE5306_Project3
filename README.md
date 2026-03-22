@@ -1,7 +1,15 @@
-# MMO Fishing Game – Prototype Architecture
+# MMO Fishing Game gRPC Prototype
 
-This repository contains a prototype for a massively‑multiplayer online (MMO) fishing game that can scale horizontally.  
-Each server instance is responsible for a *tile* of the world and acts as the single source of truth for that tile.  
+This repository contains a Python gRPC prototype for a fishing-game service with
+two checked-in deployment variants:
+
+- `server/`: a six-instance Docker Compose deployment using the same service on
+  ports `50051` through `50056`
+- `servermono/`: an alternate baseline variant with a separate copy of the
+  runtime and compose files
+
+The current baseline is a prototype service surface. The checked-in runtime does
+not yet implement Project 3 consensus logic.
 
 ---
 
@@ -27,9 +35,13 @@ Each server instance is responsible for a *tile* of the world and acts as the si
 
 ## Overview
 
-* **Goal** – Show nearby players on a live map with minimal latency.  
-* **Approach** – Horizontal scaling via tile‑based servers, gRPC for low‑latency communication.  
-* **Testing** – k6 load tests (`fishing_test.js`) to simulate concurrent users.
+- **Runtime** - Python gRPC server and client with generated protobuf stubs.
+- **Cluster variant** - `server/` starts six identical service instances on
+  separate ports.
+- **Baseline state** - user and inventory data are stored in memory inside each
+  running server process.
+- **Testing** - `fishing_test.js` contains a k6 load-test script for the
+  baseline service surface.
 
 ---
 
@@ -40,7 +52,7 @@ Each server instance is responsible for a *tile* of the world and acts as the si
 ├── client/          # Simple test client (Python)
 ├── server/          # 6‑node cluster implementation
 │   └── docker-compose.yml
-├── servermono/      # Single‑node (monolithic) implementation
+├── servermono/      # Alternate baseline server variant
 │   └── docker-compose.yml
 ├── fishing_test.js  # k6 load‑testing script
 └── fishing.proto    # gRPC service definitions
@@ -48,11 +60,14 @@ Each server instance is responsible for a *tile* of the world and acts as the si
 
 ### `client/`
 
-A minimal Python client that can:
-* Log in
-* Update location
-* Start a fishing stream
-* Receive live updates
+A minimal interactive Python client that can:
+- log in
+- send location updates
+- start a fishing stream
+- list users
+- stream current-user counts
+- fetch inventory
+- fetch the configured image bytes
 
 **Run**
 
@@ -63,7 +78,8 @@ python3 client.py
 
 ### `server/`
 
-A 6‑node Docker Compose setup. Each node runs the same service and shares a simple in‑memory store.
+A six-service Docker Compose setup. Each service runs `server.py` with a unique
+port and image path. Each running process keeps its own in-memory state.
 
 **Run**
 
@@ -74,7 +90,9 @@ docker compose up
 
 ### `servermono/`
 
-A single‑node Docker Compose setup for quick debugging and baseline performance.
+An alternate baseline server variant stored in its own directory. Its compose
+file defines one service named `fishing-cluster` and exposes ports
+`50051-50056`.
 
 **Run**
 
@@ -90,8 +108,7 @@ docker compose up
 1. **Prerequisites**
 
    * Docker & Docker Compose
-   * Python 3 (for the client)
-   * Go (to build the server binaries, if compiling locally)
+   * Python 3 with `grpcio` and `protobuf` available for the client
 
 2. **Start the Servers**
 
@@ -153,25 +170,31 @@ grpc_streams_msgs_sent.......: 5000   484.331254/s
 ```proto
 syntax = "proto3";
 
-package fishing;
+package fishingapp;
+
+import "google/protobuf/empty.proto";
 
 service FishingService {
-  rpc ListUser (ListUserRequest) returns (stream User);
+  rpc ListUsers (google.protobuf.Empty) returns (stream User);
   rpc Login (LoginRequest) returns (LoginResponse);
-  rpc UpdateLocation (UpdateLocationRequest) returns (google.protobuf.Empty);
-  rpc StartFishing (StartFishingRequest) returns (stream FishingEvent);
-  rpc CurrentUsers (CurrentUsersRequest) returns (CurrentUsersResponse);
+  rpc UpdateLocation (stream UpdateLocationRequest) returns (UpdateLocationResponse);
+  rpc StartFishing (StartFishingRequest) returns (stream Fish);
+  rpc CurrentUsers (EmptyRequest) returns (stream CurrentUsersResponse);
   rpc Inventory (InventoryRequest) returns (InventoryResponse);
-  rpc GetImage (GetImageRequest) returns (GetImageResponse);
+  rpc GetImage (ImageRequest) returns (ImageResponse);
 }
 ```
 
-* **Login** – Authenticate a player.  
-* **UpdateLocation** – Send new GPS coordinates.  
-* **StartFishing** – Opens a server‑side stream of fishing events.  
-* **CurrentUsers** – Returns the current player count and streams updates when players join/leave.  
-* **Inventory** – Lists a player’s caught fish on that node.  
-* **GetImage** – Returns an image of the tile (e.g., a map snapshot).
+- **Login** - unary RPC that returns a token composed from username and password.
+- **UpdateLocation** - client-streaming RPC that registers a user and updates
+  `(x, y)` coordinates.
+- **ListUsers** - server-streaming RPC that returns the current user snapshot.
+- **StartFishing** - server-streaming RPC that emits caught fish, if any.
+- **CurrentUsers** - server-streaming RPC that emits the current count and later
+  count changes.
+- **Inventory** - unary RPC that returns the in-memory fish inventory.
+- **GetImage** - unary RPC that returns the bytes from the configured image
+  file.
 
 ---
 
