@@ -149,9 +149,29 @@ For each task, read the corresponding spec doc before implementing:
 - [ ] README with: build/run instructions, unusual notes, external sources, GitHub link
 - [ ] Report with: team members, student IDs, work division, test screenshots, GitHub link
 
+## Agent Working Rules
+
+### Automation & Token Efficiency
+- **Create Makefiles or bash scripts** for any repeated task (build, test, proto generation, Docker operations). Do not run long multi-step commands manually each time — script them once and reuse.
+- Check if a `Makefile` already exists before creating one. If it does, extend it rather than creating a separate script.
+- Common targets to define: `make build`, `make test`, `make proto`, `make up`, `make down`, `make logs`.
+- Keep commands short and reusable. Agents should be able to run `make test` instead of remembering and typing multi-line commands.
+
+### Testing Requirements
+- **Write unit tests and smoke tests** for every new module or significant code change. Use `pytest` for Python.
+- **Always run the full test suite** after implementing new code or modifying existing code. Do not consider a task complete until all tests pass.
+- Smoke tests should verify: Docker containers start, nodes communicate via gRPC, RPC logging output matches the required format.
+- Unit tests should cover: individual functions, state transitions, edge cases (e.g., vote-abort path, split vote, majority calculation).
+- If a test fails, fix the issue before moving on. Do not leave broken tests behind.
+
+### Code Quality
+- Run `python -m py_compile` on all modified Python files to catch syntax errors early.
+- Validate Docker config with `docker compose config` after any compose file changes.
+- Keep the test/build infrastructure working at all times — a broken build blocks all future agents.
+
 ## Agent Session Startup
 
 1. Read this file (AGENTS.md)
 2. Check `docs/handoff/CURRENT_STATUS.md` for current phase and next task
 3. Read the spec doc for your assigned task
-4. Implement, test, update handoff docs when done
+4. Implement, test (run full suite), update handoff docs when done
