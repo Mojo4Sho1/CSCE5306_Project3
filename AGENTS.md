@@ -95,23 +95,27 @@ The assignment has 5 implementation questions (Q1-Q5). All use gRPC for communic
 
 ## Build & Run Commands
 
+A `Makefile` at the repo root provides all common operations. **Always use `make` targets instead of typing raw commands.**
+
 ```bash
-# Start 6-node cluster
-cd server && docker compose up --build
+make install      # install dev dependencies (grpcio, pytest, ruff, etc.)
+make check        # QUALITY GATE: lint + unit tests — run before marking any task complete
+make test         # run unit tests only (no Docker needed)
+make test-smoke   # run smoke tests (requires Docker cluster to be running)
+make lint         # ruff linter on owned source files
+make format       # ruff auto-formatter
+make proto        # regenerate stubs from 2pc.proto and raft.proto (Q1/Q3+)
+make up           # docker compose up --build -d (6-node cluster)
+make down         # docker compose down
+make logs         # docker compose logs -f
 
-# Run client (from host, requires grpcio + protobuf)
+# Run client interactively (requires cluster to be up)
 cd client && python3 client.py
-
-# Validate Docker config
-docker compose -f server/docker-compose.yml config
-
-# Compile-check Python
-python -m py_compile server/server.py client/client.py
-
-# Generate proto stubs (when adding new protos)
-python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. 2pc.proto
-python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. raft.proto
 ```
+
+**Note on `make proto`:** Will fail until `server/2pc.proto` and `server/raft.proto` are created in Q1/Q3. That is expected — not a bug.
+
+**Note on `make typecheck`:** Not yet configured. Will be added in Q1 once typed implementation files exist.
 
 ## RPC Logging Formats (Assignment-Required)
 
@@ -152,22 +156,23 @@ For each task, read the corresponding spec doc before implementing:
 ## Agent Working Rules
 
 ### Automation & Token Efficiency
-- **Create Makefiles or bash scripts** for any repeated task (build, test, proto generation, Docker operations). Do not run long multi-step commands manually each time — script them once and reuse.
-- Check if a `Makefile` already exists before creating one. If it does, extend it rather than creating a separate script.
-- Common targets to define: `make build`, `make test`, `make proto`, `make up`, `make down`, `make logs`.
-- Keep commands short and reusable. Agents should be able to run `make test` instead of remembering and typing multi-line commands.
+- A `Makefile` already exists at the repo root. **Extend it** for new tasks rather than creating separate scripts.
+- Never run long multi-step commands manually — add a `make` target and use it. Future agents (and you on the next run) will thank you.
+- The common targets are already defined: `make test`, `make proto`, `make up`, `make down`, `make logs`, `make check`.
 
 ### Testing Requirements
-- **Write unit tests and smoke tests** for every new module or significant code change. Use `pytest` for Python.
-- **Always run the full test suite** after implementing new code or modifying existing code. Do not consider a task complete until all tests pass.
-- Smoke tests should verify: Docker containers start, nodes communicate via gRPC, RPC logging output matches the required format.
-- Unit tests should cover: individual functions, state transitions, edge cases (e.g., vote-abort path, split vote, majority calculation).
+- **`make check` is the quality gate.** Run it before marking any task complete. It runs lint + unit tests.
+- **Write tests for every new module** — use `pytest`. Unit tests go in `tests/unit/`, smoke tests in `tests/smoke/`.
+- After any Docker/compose change, also run `make test-smoke` to verify the live cluster still works.
+- Unit tests should cover: state transitions, edge cases (vote-abort path, split vote, majority calculation, log index arithmetic).
+- Smoke tests should verify: containers start, nodes communicate over gRPC, RPC log output matches the required format.
 - If a test fails, fix the issue before moving on. Do not leave broken tests behind.
+- **`make typecheck`** is not yet configured. It will be added in Q1 once we write our first typed implementation files. When added, include it in `make check`.
 
 ### Code Quality
-- Run `python -m py_compile` on all modified Python files to catch syntax errors early.
-- Validate Docker config with `docker compose config` after any compose file changes.
-- Keep the test/build infrastructure working at all times — a broken build blocks all future agents.
+- `make lint` (ruff) catches import errors, unused variables, and style issues — run it early and often.
+- Validate Docker config with `docker compose config` after any compose file changes (or rely on `make up` which will surface errors).
+- Keep the test/build infrastructure working at all times — a broken `make check` blocks all future agents.
 
 ## Agent Session Startup
 

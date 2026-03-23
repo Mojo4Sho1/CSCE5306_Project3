@@ -1,0 +1,5 @@
+-r requirements.txt
+grpcio-tools>=1.76.0
+pytest>=8.0.0
+pytest-timeout>=2.3.0
+ruff>=0.4.0
