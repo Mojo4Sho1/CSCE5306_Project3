@@ -87,10 +87,12 @@ The assignment has 5 implementation questions (Q1-Q5). All use gRPC for communic
     └── handoff/
         ├── CURRENT_STATUS.md
         ├── NEXT_TASK.md
+        ├── NEXT_TASK_TEMPLATE.md   # Template — use when rewriting NEXT_TASK.md
         ├── TASK_QUEUE.md
         ├── DECISION_LOG.md
         ├── SPEC_CONFORMANCE_CHECKLIST.md
-        └── OVERVIEW_CHECKLIST.md
+        ├── OVERVIEW_CHECKLIST.md
+        └── BLOCKERS.md             # Running log of open and resolved blockers
 ```
 
 ## Build & Run Commands
@@ -174,9 +176,36 @@ For each task, read the corresponding spec doc before implementing:
 - Validate Docker config with `docker compose config` after any compose file changes (or rely on `make up` which will surface errors).
 - Keep the test/build infrastructure working at all times — a broken `make check` blocks all future agents.
 
+## Blocker Handling Protocol
+
+When you hit a blocker during implementation, follow the path below. All entries go in `docs/handoff/BLOCKERS.md` using the template format in that file.
+
+### Blocker you CANNOT resolve on your own
+
+1. Log it in `docs/handoff/BLOCKERS.md` under **Unresolved Blockers** — describe what went wrong, what you tried, and what guidance Joe needs to provide.
+2. Continue with any remaining subtasks that do NOT depend on the blocked one.
+3. At the **top of your response** (before any other output), flag it clearly:
+   `BLOCKER (unresolved): <title> — details in docs/handoff/BLOCKERS.md`
+4. When rewriting NEXT_TASK.md for the next agent, reference the open blocker so it isn't forgotten.
+
+### Blocker you CAN resolve on your own
+
+1. Fix it.
+2. Log it in `docs/handoff/BLOCKERS.md` under **Resolved Blockers** — include root cause, exact solution, and a prevention tip for future agents.
+3. If the fix is likely to apply in other projects (library quirk, Docker behavior, gRPC/protoc gotcha, Python packaging edge case, etc.), save it to this project's auto-memory as a `feedback`-type entry so it's loaded in future sessions.
+4. At the **top of your response**, flag it:
+   `BLOCKER RESOLVED: <title> — logged to BLOCKERS.md` (+ `+ auto-memory` if you wrote a memory entry)
+
+### Cross-project propagation
+
+This project's auto-memory is session-local to this repo. For knowledge to reach Joe's other projects, he needs to see it and decide whether to propagate it. **Flag anything broadly useful** — Joe will push relevant findings to `~/.claude/memory/` for other projects to pick up.
+
+---
+
 ## Agent Session Startup
 
 1. Read this file (AGENTS.md)
 2. Check `docs/handoff/CURRENT_STATUS.md` for current phase and next task
-3. Read the spec doc for your assigned task
-4. Implement, test (run full suite), update handoff docs when done
+3. Check `docs/handoff/BLOCKERS.md` for any open unresolved blockers — do not start work that depends on an open blocker without first notifying Joe
+4. Read the spec doc for your assigned task
+5. Implement, test (run full suite), update handoff docs when done
