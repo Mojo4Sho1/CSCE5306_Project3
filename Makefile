@@ -1,4 +1,4 @@
-.PHONY: install lint format test test-smoke proto proto-2pc proto-raft up down logs check
+.PHONY: install lint format test test-smoke proto proto-2pc proto-raft up down logs check pdf
 
 COMPOSE_FILE := server/docker-compose.yml
 PYTHON       := python3
@@ -44,3 +44,8 @@ logs:
 
 # Quality gate: run before marking any task complete
 check: lint test
+
+# Build the PDF report (requires pdflatex on PATH).
+# Screenshots must be placed in docs/report/screenshots/ before building.
+pdf:
+	cd docs/report && pdflatex -interaction=nonstopmode report.tex && pdflatex -interaction=nonstopmode report.tex
