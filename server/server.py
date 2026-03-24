@@ -148,6 +148,55 @@ def run_voting_phase(jwt: str, x: float, y: float, transaction_id: int) -> list:
     return votes
 
 
+def run_decision_phase(jwt: str, x: float, y: float, transaction_id: int, votes: list) -> bool:
+    """Coordinator: send GlobalDecision to all peers, then call intra-node NotifyDecision.
+
+    Returns True if global-commit, False if global-abort.
+    """
+    global_commit = all(v.vote_commit for v in votes) if votes else True
+    peers = [p.strip() for p in PEERS_STR.split(",") if p.strip()]
+    update = twopc_pb2.LocationUpdate(user_jwt=jwt, x=x, y=y)
+
+    for peer in peers:
+        pid = peer_node_id(peer)
+        print(
+            f"Phase decision of Node {NODE_ID} sends RPC GlobalDecision"
+            f" to Phase decision of Node {pid}"
+        )
+        try:
+            channel = grpc.insecure_channel(peer)
+            stub = twopc_grpc.TwoPhaseCommitServiceStub(channel)
+            stub.GlobalDecision(
+                twopc_pb2.DecisionMessage(
+                    coordinator_id=NODE_ID,
+                    transaction_id=transaction_id,
+                    global_commit=global_commit,
+                    update=update,
+                )
+            )
+        except grpc.RpcError as exc:
+            print(f"[2PC] GlobalDecision to {peer} failed: {exc}")
+
+    # Intra-node gRPC: decision phase → voting phase (same container, localhost)
+    print(
+        f"Phase decision of Node {NODE_ID} sends RPC NotifyDecision"
+        f" to Phase voting of Node {NODE_ID}"
+    )
+    try:
+        channel = grpc.insecure_channel(f"localhost:{PORT}")
+        intra_stub = twopc_grpc.IntraNodePhaseServiceStub(channel)
+        intra_stub.NotifyDecision(
+            twopc_pb2.IntraDecisionNotification(
+                transaction_id=transaction_id,
+                global_commit=global_commit,
+            )
+        )
+    except grpc.RpcError as exc:
+        print(f"[2PC] Intra-node NotifyDecision failed: {exc}")
+
+    return global_commit
+
+
 # ----------------------------------------------------------------------
 # 2PC servicers
 # ----------------------------------------------------------------------
@@ -178,11 +227,21 @@ class TwoPhaseCommitServicer(twopc_grpc.TwoPhaseCommitServiceServicer):
         )
 
     def GlobalDecision(self, request, context):
-        # Q2 placeholder — decision phase not yet implemented
+        # Receiver-side log (assignment-required format)
+        print(
+            f"Phase decision of Node {NODE_ID} sends RPC GlobalDecision"
+            f" to Phase decision of Node {request.coordinator_id}"
+        )
+        if request.global_commit:
+            upd = request.update
+            state.update_user(upd.user_jwt, upd.x, upd.y)
+            applied = True
+        else:
+            applied = False
         return twopc_pb2.DecisionAck(
             participant_id=NODE_ID,
             transaction_id=request.transaction_id,
-            applied=False,
+            applied=applied,
         )
 
 
@@ -194,7 +253,7 @@ class IntraNodePhaseServicer(twopc_grpc.IntraNodePhaseServiceServicer):
         return twopc_pb2.IntraVoteAck(acknowledged=True)
 
     def NotifyDecision(self, request, context):
-        # Q2 placeholder
+        # Voting phase receives notification of final decision from decision phase
         return twopc_pb2.IntraDecisionAck(acknowledged=True)
 
 
@@ -231,11 +290,13 @@ class FishingService(grpc_stub.FishingServiceServicer):
 
             if IS_COORDINATOR:
                 tx_id = next_transaction_id()
-                run_voting_phase(req.jwt, req.x, req.y, tx_id)
-
-            # Keep the user's location up to date
-            # (Q2 will gate this on GlobalDecision; for Q1 we update locally)
-            state.update_user(jwt, req.x, req.y)
+                votes = run_voting_phase(req.jwt, req.x, req.y, tx_id)
+                global_commit = run_decision_phase(req.jwt, req.x, req.y, tx_id, votes)
+                if global_commit:
+                    state.update_user(jwt, req.x, req.y)
+            else:
+                # Non-coordinator: accept location update directly (testing convenience)
+                state.update_user(jwt, req.x, req.y)
 
         # No explicit call to cleanup() is needed – it will run automatically.
         return pb.UpdateLocationResponse(success=True)

@@ -4,15 +4,14 @@
 
 ## Task summary
 
-Implement the 2PC decision phase (Q2): coordinator collects votes and sends `GlobalDecision`, participants apply or discard the location update, `IntraNodePhaseService.NotifyDecision` wires decision → voting phase, and all required RPC log messages are printed.
+Implement Q3 (Raft leader election): create `raft.proto`, generate stubs, implement the follower/candidate/leader state machine in a new `raft_node.py` module, handle `RequestVote` and heartbeat `AppendEntries` RPCs, and register `RaftService` on the existing gRPC server.
 
-**Task queue reference:** q2-2pc-decision (see `docs/handoff/TASK_QUEUE.md`)
+**Task queue reference:** q3-raft-election (see `docs/handoff/TASK_QUEUE.md`)
 
 ## Why this task is next
 
-- Q1 is complete — `twopc.proto`, stubs, coordinator `VoteRequest`, participant `VoteResponse`, intra-node `ReportVote`, and Docker env vars are all in place.
-- Q2 builds directly on Q1's scaffolding: `GlobalDecision` RPC and `NotifyDecision` are already stub-declared in `twopc.proto`, just not implemented.
-- `make check` passes (16/16 tests) and Docker cluster is validated.
+- Q1 (2PC voting) and Q2 (2PC decision) are both COMPLETE — `twopc.proto`, all servicers, log formats, 26 unit tests, `make check` clean.
+- Q3 builds on the existing Docker/env-var setup (NODE_ID, PEERS) from 2PC — no compose changes needed.
 
 Long-horizon references:
 - `docs/handoff/OVERVIEW_CHECKLIST.md` (phase A–G status)
@@ -20,73 +19,83 @@ Long-horizon references:
 
 ## Recommended task order
 
-1. **Implement coordinator `GlobalDecision` logic in `server/server.py`** — after collecting votes in `run_voting_phase`, decide global-commit (all true) or global-abort (any false), then send `GlobalDecision` RPC to all peers with the decision and the proposed update.
-2. **Implement participant `GlobalDecision` handler** — fill in `TwoPhaseCommitServicer.GlobalDecision`: on `global_commit=true`, apply `state.update_user(jwt, x, y)`; on false, discard. Return `DecisionAck`.
-3. **Implement `IntraNodePhaseService.NotifyDecision`** — after the coordinator sends GlobalDecision to all peers, call `NotifyDecision` on localhost (intra-node gRPC) to inform the voting phase of the final outcome. The voting phase handler receives this and can log/record the outcome.
-4. **Gate the coordinator's local state update** — in Q1, the coordinator applied the update locally unconditionally. In Q2, only apply if all votes were commit (mirrors the participant behavior).
-5. **Add required Q2 RPC log messages** — both client-side (coordinator sending) and server-side (participant receiving), using the decision-phase format.
-6. **Extend unit tests** — add tests for coordinator decision logic, participant apply/discard behavior, intra-node NotifyDecision, and Q2 log format in `tests/unit/test_2pc.py`.
-7. **Run `make check`** — lint + unit tests must pass.
-8. **Validate with Docker** — `docker compose up --build`, send `UpdateLocation` to Node 1, confirm GlobalDecision log lines appear for Nodes 2–6.
-9. **Mandatory final subtask** — see below.
+1. **Create `server/raft.proto`** — copy the proto definition from `docs/spec/04_raft_election_contract.md` exactly (do not modify it).
+2. **Generate stubs** — `cd server && python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. raft.proto` → produces `raft_pb2.py` / `raft_pb2_grpc.py`. Add a `proto-raft` target to `Makefile`.
+3. **Create `server/raft_node.py`** — implement `RaftNode` class (state machine) and `RaftServicer` (gRPC handler). Use the spec's `RaftNode.__init__` skeleton as the starting point.
+4. **Implement election timeout monitor** — background thread that promotes follower → candidate when no heartbeat received within `election_timeout` seconds (random [1.5, 3.0]).
+5. **Implement RequestVote handler** — vote logic per spec (term comparison, voted_for check). Log required format on both sender and receiver sides.
+6. **Implement AppendEntries handler (heartbeat)** — accept/reset timer on valid leader; entries is empty in Q3 (log replication is Q4). Log required format.
+7. **Implement heartbeat sender** — leader background thread sends AppendEntries to all peers every 1 second.
+8. **Wire into `server/server.py`** — import `raft_node`, instantiate `RaftNode`, register `RaftService`, start timer and heartbeat threads in `serve()`.
+9. **Add unit tests** — in `tests/unit/test_raft.py`: follower initial state, election timeout triggers candidacy, vote-grant/reject logic, majority-vote → leader, heartbeat resets timer, higher-term causes step-down. Minimum 8 tests.
+10. **Run `make check`** — lint + all tests must pass.
+11. **Validate with Docker** — `docker compose up --build`; confirm leader elected and heartbeat log lines appear.
+12. **Mandatory final subtask** — update handoff docs (see below).
 
-Steps 1 and 2 can be developed in parallel.
+Steps 3–7 can be developed mostly in parallel; step 8 depends on 3–7.
 
 ## Scope (in)
 
-- Coordinator: after vote collection, sends `GlobalDecision` RPC to all participants
-- Participants: receive `GlobalDecision`, apply or discard location update via `state.update_user`
-- Coordinator: gates local state update on unanimous commit
-- `IntraNodePhaseService.NotifyDecision` intra-node gRPC call (coordinator → localhost)
-- Q2 RPC log messages in required format (both sender and receiver sides)
-- Unit tests for decision logic, apply/discard, NotifyDecision, log format
+- `server/raft.proto` with `RequestVote` and `AppendEntries` RPCs
+- Generated stubs `raft_pb2.py` / `raft_pb2_grpc.py`
+- `server/raft_node.py` — `RaftNode` class and `RaftServicer`
+- Follower/candidate/leader state machine with election timeout [1.5s, 3.0s] and heartbeat interval 1s
+- `RequestVote` RPC (election flow) and `AppendEntries` RPC (heartbeat only — no log entries)
+- RPC log messages in required format (sender and receiver)
+- `Makefile` `proto-raft` target
+- Unit tests (`tests/unit/test_raft.py`) — minimum 8 tests, no Docker required
 - `make check` passes
 
 ## Scope (out)
 
-- Raft (Q3, Q4) — not this milestone
-- Failure tests (Q5) — not this milestone
-- Re-implementing Q1 — all Q1 code is already in place; extend it, don't replace it
+- Log replication (Q4) — `AppendEntries` carries no entries in Q3
+- Client forwarding to leader (Q4)
+- Failure tests (Q5)
+- Re-implementing 2PC — all Q1+Q2 code stays; Raft runs alongside it
 
 ## Dependencies / prerequisites
 
 - Quick orientation: `AGENTS.md` (read first), `docs/handoff/CURRENT_STATUS.md`
 - Environment setup: `requirements-dev.txt`, `Makefile`
 - Specs (read only what's needed):
-  - `docs/spec/03_2pc_contract.md` — same spec, Q2 decision-phase sections
-- Inputs from Q1: `server/twopc.proto`, `server/twopc_pb2.py`, `server/twopc_pb2_grpc.py`, `server/server.py` (with Q1 voting logic), `server/docker-compose.yml`
+  - `docs/spec/04_raft_election_contract.md` — full Q3 spec (proto, state machine, timeouts, log format)
+- Inputs from prior phase: `server/server.py` (existing `serve()` function and env config), `server/docker-compose.yml` (NODE_ID, PEERS already set)
 
 ## Implementation notes
 
-- **Proto stubs already exist** — `GlobalDecision` and `NotifyDecision` are already declared in `twopc.proto` and have stub implementations in `server.py`. Fill them in.
-- **`run_voting_phase` already returns the vote list** — extend it to call `GlobalDecision` on peers after collecting votes, then call `NotifyDecision` on localhost.
-- **Coordinator local update gating** — in Q1, `UpdateLocation` calls `state.update_user` unconditionally. In Q2, only call it if the decision is global-commit. For participants, `state.update_user` is called inside `GlobalDecision` handler.
-- **PEERS format** — coordinator's `PEERS` env var is `fishing2:50052,...`. Re-use the same `peers` list and `peer_node_id()` helper from Q1.
+- **New module `raft_node.py`**: keep Raft logic out of `server.py`. Import and wire in `serve()`.
+- **Thread safety**: use `threading.Lock` on all shared Raft state (term, role, voted_for, last_heartbeat_time).
+- **Election timer thread**: check `time.time() - self.last_heartbeat_time > self.election_timeout` in a loop with small sleep (0.1s). On timeout, call `self.start_election()`.
+- **Heartbeat thread**: only runs when `self.role == "leader"`. Sleep 1s between rounds.
 - **Log format** (must match exactly):
-  - Sender (coordinator): `Phase decision of Node 1 sends RPC GlobalDecision to Phase decision of Node 2`
-  - Receiver (participant): `Phase decision of Node 2 sends RPC GlobalDecision to Phase decision of Node 1`
-  - Intra-node (coordinator): `Phase decision of Node 1 sends RPC NotifyDecision to Phase voting of Node 1`
+  - Sender: `Node <sender_id> sends RPC RequestVote to Node <receiver_id>`
+  - Receiver: `Node <receiver_id> runs RPC RequestVote called by Node <sender_id>`
+  - Same pattern for AppendEntries.
+- **PEERS env var format**: same `fishing2:50052,...` as 2PC. Reuse `peer_node_id()` helper from `server.py`.
 - Run `make check` after every significant code change.
 
 ## Acceptance criteria (definition of done)
 
-- [ ] Coordinator sends `GlobalDecision` to all participants after vote collection
-- [ ] Participants apply `state.update_user` on global-commit, discard on global-abort
-- [ ] Coordinator's local update gated on unanimous commit
-- [ ] `IntraNodePhaseService.NotifyDecision` called on localhost with final decision
-- [ ] Q2 RPC log messages match required format (both sender and receiver)
+- [ ] `server/raft.proto` exists with RequestVote and AppendEntries RPCs
+- [ ] Generated stubs compile without errors
+- [ ] All nodes start as followers
+- [ ] Election timeout triggers candidate transition
+- [ ] Candidate sends RequestVote and counts majority → becomes leader
+- [ ] Leader sends heartbeats every 1 second
+- [ ] Followers reset election timer on heartbeat receipt
+- [ ] Higher-term messages cause step-down to follower
+- [ ] All RPC calls produce the required log format
 - [ ] All unit tests pass (`make test`)
 - [ ] `make check` passes (lint + unit tests)
-- [ ] 5+ Docker containers start and full 2PC flow (vote + decision) completes on `UpdateLocation`
+- [ ] 5+ containerized nodes elect a leader (Docker validation)
 - [ ] Handoff docs updated (see mandatory final subtask below)
 
 ## Verification checklist
 
 - [ ] `make check` passes
 - [ ] `docker compose -f server/docker-compose.yml up --build` starts 5+ containers
-- [ ] `UpdateLocation` to Node 1 produces both VoteRequest AND GlobalDecision log lines
-- [ ] `UpdateLocation` with negative coordinates produces vote-abort AND global-abort log lines (no state update)
-- [ ] `NotifyDecision` intra-node log appears on Node 1
+- [ ] Leader election log lines appear within 3 seconds of cluster start
+- [ ] Heartbeat `AppendEntries` log lines appear every ~1 second from leader
 - [ ] No unresolved placeholder text in new code or docs
 
 ## Mandatory final subtask: Update handoff documentation
@@ -95,20 +104,21 @@ Steps 1 and 2 can be developed in parallel.
 
 Using `docs/handoff/NEXT_TASK_TEMPLATE.md` as a guide, update the following before closing this batch:
 
-- [ ] Mark `q2-2pc-decision` as `done` in `docs/handoff/TASK_QUEUE.md`
-- [ ] Update Phase C status to `DONE` in `docs/handoff/OVERVIEW_CHECKLIST.md` and tick exit criteria
+- [ ] Mark `q3-raft-election` as `done` in `docs/handoff/TASK_QUEUE.md`
+- [ ] Update Phase D status to `DONE` in `docs/handoff/OVERVIEW_CHECKLIST.md` and tick exit criteria
 - [ ] Rewrite `docs/handoff/CURRENT_STATUS.md`:
   - What was completed (concrete, verifiable — list files created/modified)
   - Checks run and their outcomes (`make check`, docker validation)
   - Any remaining blockers or caveats
 - [ ] Update `docs/handoff/BLOCKERS.md`: mark any blockers resolved this session; add any new unresolved blockers that need Joe's input
-- [ ] Rewrite `docs/handoff/NEXT_TASK.md` to brief the next agent on **Q3 (Raft leader election)**, following `docs/handoff/NEXT_TASK_TEMPLATE.md`
-  - Q3 subtasks: create `raft.proto`, generate stubs, implement follower/candidate/leader state machine, RequestVote RPC, heartbeat AppendEntries, election timeout [1.5s, 3s]
-  - Reference `docs/spec/04_raft_election_contract.md`
+- [ ] Rewrite `docs/handoff/NEXT_TASK.md` to brief the next agent on **Q4 (Raft log replication)**, following `docs/handoff/NEXT_TASK_TEMPLATE.md`
+  - Q4 subtasks: extend AppendEntries with log entries, majority-ACK commit, client forwarding to leader
+  - Reference `docs/spec/05_raft_log_replication_contract.md`
 
 The next `NEXT_TASK.md` must itself include this same "Mandatory final subtask" section so the pattern propagates to every future agent.
 
 ## Risks / rollback notes
 
-- **Coordinator local update race** — in `UpdateLocation` (client-streaming), the coordinator now must NOT call `state.update_user` before the decision comes back. The voting-phase call is synchronous (blocking), so this is straightforward — just move the `state.update_user` call to after `run_voting_phase` returns, conditioned on the commit decision.
-- **Participant state consistency** — participants now get their state update from `GlobalDecision`, not from `UpdateLocation`. Since participants are NOT coordinators, their `UpdateLocation` handler will not trigger any 2PC flow (IS_COORDINATOR=false). If a non-coordinator receives an `UpdateLocation` directly from a client, it should either reject it or forward it (forwarding is a Q4/Raft concern — for now, participants can still accept it directly for testing convenience).
+- **Election storm on startup**: all nodes start simultaneously with overlapping timeouts. The [1.5s, 3.0s] range should stagger elections enough, but if all pick similar timeouts a split vote can repeat. Re-randomize timeout on each new election to resolve.
+- **gRPC channel reuse**: creating a new channel per RPC (as done in 2PC) is fine for correctness but slow. For Q3 heartbeats at 1s intervals it is acceptable — do not optimize unless timeouts occur.
+- **Thread lifecycle**: the heartbeat thread must check `self.role == "leader"` on each iteration and exit (or idle) if the node steps down. A stale heartbeat sender running on a follower will cause term confusion.

@@ -243,3 +243,315 @@ def test_peer_node_id_extraction():
     assert peer_node_id("fishing1:50051") == 1
     assert peer_node_id("fishing3:50053") == 3
     assert peer_node_id("fishing6:50056") == 6
+
+
+# ===========================================================================
+# Q2 — Decision Phase Tests
+# ===========================================================================
+
+
+@pytest.fixture()
+def coordinator_servicer(monkeypatch):
+    """TwoPhaseCommitServicer with NODE_ID=1 (coordinator / participant perspective)."""
+    import server as srv
+
+    monkeypatch.setattr(srv, "NODE_ID", 1)
+    from server import TwoPhaseCommitServicer
+
+    return TwoPhaseCommitServicer()
+
+
+# ---------------------------------------------------------------------------
+# Test 11: global-commit when all votes are commit
+# ---------------------------------------------------------------------------
+
+
+def test_run_decision_phase_global_commit(monkeypatch):
+    """run_decision_phase returns True when all votes are vote_commit=True."""
+    import server as srv
+
+    votes = [
+        twopc_pb2.VoteResponse(participant_id=2, transaction_id=1, vote_commit=True),
+        twopc_pb2.VoteResponse(participant_id=3, transaction_id=1, vote_commit=True),
+    ]
+
+    mock_stub = MagicMock()
+    mock_stub.GlobalDecision.return_value = twopc_pb2.DecisionAck(
+        participant_id=2, transaction_id=1, applied=True
+    )
+    mock_intra_stub = MagicMock()
+    mock_intra_stub.NotifyDecision.return_value = twopc_pb2.IntraDecisionAck(acknowledged=True)
+
+    with patch("grpc.insecure_channel"):
+        with patch.object(twopc_grpc, "TwoPhaseCommitServiceStub", return_value=mock_stub):
+            with patch.object(
+                twopc_grpc, "IntraNodePhaseServiceStub", return_value=mock_intra_stub
+            ):
+                result = srv.run_decision_phase("alice:pw", 1.0, 2.0, 1, votes)
+
+    assert result is True
+
+
+# ---------------------------------------------------------------------------
+# Test 12: global-abort when any vote is abort
+# ---------------------------------------------------------------------------
+
+
+def test_run_decision_phase_global_abort(monkeypatch):
+    """run_decision_phase returns False when any vote is vote_commit=False."""
+    import server as srv
+
+    votes = [
+        twopc_pb2.VoteResponse(participant_id=2, transaction_id=2, vote_commit=True),
+        twopc_pb2.VoteResponse(participant_id=3, transaction_id=2, vote_commit=False),
+    ]
+
+    mock_stub = MagicMock()
+    mock_stub.GlobalDecision.return_value = twopc_pb2.DecisionAck(
+        participant_id=2, transaction_id=2, applied=False
+    )
+    mock_intra_stub = MagicMock()
+    mock_intra_stub.NotifyDecision.return_value = twopc_pb2.IntraDecisionAck(acknowledged=True)
+
+    with patch("grpc.insecure_channel"):
+        with patch.object(twopc_grpc, "TwoPhaseCommitServiceStub", return_value=mock_stub):
+            with patch.object(
+                twopc_grpc, "IntraNodePhaseServiceStub", return_value=mock_intra_stub
+            ):
+                result = srv.run_decision_phase("alice:pw", -1.0, 2.0, 2, votes)
+
+    assert result is False
+
+
+# ---------------------------------------------------------------------------
+# Test 13: coordinator sends GlobalDecision to all peers
+# ---------------------------------------------------------------------------
+
+
+def test_run_decision_phase_calls_all_peers(monkeypatch):
+    """run_decision_phase calls GlobalDecision exactly once per peer."""
+    import server as srv
+
+    votes = [
+        twopc_pb2.VoteResponse(participant_id=2, transaction_id=3, vote_commit=True),
+        twopc_pb2.VoteResponse(participant_id=3, transaction_id=3, vote_commit=True),
+    ]
+
+    mock_stub = MagicMock()
+    mock_stub.GlobalDecision.return_value = twopc_pb2.DecisionAck(
+        participant_id=2, transaction_id=3, applied=True
+    )
+    mock_intra_stub = MagicMock()
+    mock_intra_stub.NotifyDecision.return_value = twopc_pb2.IntraDecisionAck(acknowledged=True)
+
+    with patch("grpc.insecure_channel"):
+        with patch.object(twopc_grpc, "TwoPhaseCommitServiceStub", return_value=mock_stub):
+            with patch.object(
+                twopc_grpc, "IntraNodePhaseServiceStub", return_value=mock_intra_stub
+            ):
+                srv.run_decision_phase("alice:pw", 1.0, 2.0, 3, votes)
+
+    # PEERS_STR fixture: "fishing2:50052,fishing3:50053" → 2 peers
+    assert mock_stub.GlobalDecision.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Test 14: participant applies state update on global-commit
+# ---------------------------------------------------------------------------
+
+
+def test_participant_applies_on_global_commit(monkeypatch):
+    """GlobalDecision handler applies state.update_user when global_commit=True."""
+    import server as srv
+
+    monkeypatch.setattr(srv, "NODE_ID", 2)
+    srv.state.add_user("alice:pw")
+
+    from server import TwoPhaseCommitServicer
+
+    servicer = TwoPhaseCommitServicer()
+    req = twopc_pb2.DecisionMessage(
+        coordinator_id=1,
+        transaction_id=10,
+        global_commit=True,
+        update=twopc_pb2.LocationUpdate(user_jwt="alice:pw", x=7.0, y=8.0),
+    )
+    resp = servicer.GlobalDecision(req, _mock_ctx())
+
+    assert resp.applied is True
+    user = srv.state.users.get("alice:pw")
+    assert user is not None
+    assert user.x == 7.0
+    assert user.y == 8.0
+
+
+# ---------------------------------------------------------------------------
+# Test 15: participant discards on global-abort
+# ---------------------------------------------------------------------------
+
+
+def test_participant_discards_on_global_abort(monkeypatch):
+    """GlobalDecision handler does not apply state update when global_commit=False."""
+    import server as srv
+
+    monkeypatch.setattr(srv, "NODE_ID", 2)
+    srv.state.add_user("bob:pw")
+    # Set initial position
+    srv.state.update_user("bob:pw", 1.0, 1.0)
+
+    from server import TwoPhaseCommitServicer
+
+    servicer = TwoPhaseCommitServicer()
+    req = twopc_pb2.DecisionMessage(
+        coordinator_id=1,
+        transaction_id=11,
+        global_commit=False,
+        update=twopc_pb2.LocationUpdate(user_jwt="bob:pw", x=-5.0, y=-5.0),
+    )
+    resp = servicer.GlobalDecision(req, _mock_ctx())
+
+    assert resp.applied is False
+    # State should remain at original position
+    user = srv.state.users.get("bob:pw")
+    assert user.x == 1.0
+    assert user.y == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Test 16: decision sender log format (coordinator sending GlobalDecision)
+# ---------------------------------------------------------------------------
+
+
+def test_decision_sender_log_format(monkeypatch, capsys):
+    """Coordinator prints required log line when sending GlobalDecision to each peer."""
+    import server as srv
+
+    votes = [
+        twopc_pb2.VoteResponse(participant_id=2, transaction_id=5, vote_commit=True),
+        twopc_pb2.VoteResponse(participant_id=3, transaction_id=5, vote_commit=True),
+    ]
+
+    mock_stub = MagicMock()
+    mock_stub.GlobalDecision.return_value = twopc_pb2.DecisionAck(
+        participant_id=2, transaction_id=5, applied=True
+    )
+    mock_intra_stub = MagicMock()
+    mock_intra_stub.NotifyDecision.return_value = twopc_pb2.IntraDecisionAck(acknowledged=True)
+
+    with patch("grpc.insecure_channel"):
+        with patch.object(twopc_grpc, "TwoPhaseCommitServiceStub", return_value=mock_stub):
+            with patch.object(
+                twopc_grpc, "IntraNodePhaseServiceStub", return_value=mock_intra_stub
+            ):
+                srv.run_decision_phase("alice:pw", 1.0, 2.0, 5, votes)
+
+    captured = capsys.readouterr()
+    assert (
+        "Phase decision of Node 1 sends RPC GlobalDecision to Phase decision of Node 2"
+        in captured.out
+    )
+    assert (
+        "Phase decision of Node 1 sends RPC GlobalDecision to Phase decision of Node 3"
+        in captured.out
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 17: decision receiver log format (participant receiving GlobalDecision)
+# ---------------------------------------------------------------------------
+
+
+def test_decision_receiver_log_format(monkeypatch, capsys):
+    """Participant prints required log line when receiving GlobalDecision."""
+    import server as srv
+
+    monkeypatch.setattr(srv, "NODE_ID", 2)
+    srv.state.add_user("carol:pw")
+
+    from server import TwoPhaseCommitServicer
+
+    servicer = TwoPhaseCommitServicer()
+    req = twopc_pb2.DecisionMessage(
+        coordinator_id=1,
+        transaction_id=6,
+        global_commit=True,
+        update=twopc_pb2.LocationUpdate(user_jwt="carol:pw", x=2.0, y=3.0),
+    )
+    servicer.GlobalDecision(req, _mock_ctx())
+
+    captured = capsys.readouterr()
+    expected = "Phase decision of Node 2 sends RPC GlobalDecision to Phase decision of Node 1"
+    assert expected in captured.out
+
+
+# ---------------------------------------------------------------------------
+# Test 18: intra-node NotifyDecision log format
+# ---------------------------------------------------------------------------
+
+
+def test_notify_decision_intra_node_log(monkeypatch, capsys):
+    """Coordinator prints NotifyDecision log line for intra-node call."""
+    import server as srv
+
+    votes = [
+        twopc_pb2.VoteResponse(participant_id=2, transaction_id=7, vote_commit=True),
+    ]
+
+    mock_stub = MagicMock()
+    mock_stub.GlobalDecision.return_value = twopc_pb2.DecisionAck(
+        participant_id=2, transaction_id=7, applied=True
+    )
+    mock_intra_stub = MagicMock()
+    mock_intra_stub.NotifyDecision.return_value = twopc_pb2.IntraDecisionAck(acknowledged=True)
+
+    with patch("grpc.insecure_channel"):
+        with patch.object(twopc_grpc, "TwoPhaseCommitServiceStub", return_value=mock_stub):
+            with patch.object(
+                twopc_grpc, "IntraNodePhaseServiceStub", return_value=mock_intra_stub
+            ):
+                srv.run_decision_phase("alice:pw", 1.0, 2.0, 7, votes)
+
+    captured = capsys.readouterr()
+    expected = "Phase decision of Node 1 sends RPC NotifyDecision to Phase voting of Node 1"
+    assert expected in captured.out
+
+
+# ---------------------------------------------------------------------------
+# Test 19: intra-node NotifyDecision servicer returns acknowledged=True
+# ---------------------------------------------------------------------------
+
+
+def test_intra_node_notify_decision_ack(intra_servicer):
+    """IntraNodePhaseServicer.NotifyDecision acknowledges the call."""
+    req = twopc_pb2.IntraDecisionNotification(transaction_id=1, global_commit=True)
+    resp = intra_servicer.NotifyDecision(req, _mock_ctx())
+    assert resp.acknowledged is True
+
+
+# ---------------------------------------------------------------------------
+# Test 20: coordinator gates local update on global-commit
+# ---------------------------------------------------------------------------
+
+
+def test_coordinator_gates_local_update_on_abort(monkeypatch):
+    """run_decision_phase returns False on abort, so coordinator must not update state."""
+    import server as srv
+
+    # Single abort vote
+    votes = [twopc_pb2.VoteResponse(participant_id=2, transaction_id=20, vote_commit=False)]
+
+    mock_stub = MagicMock()
+    mock_stub.GlobalDecision.return_value = twopc_pb2.DecisionAck(
+        participant_id=2, transaction_id=20, applied=False
+    )
+    mock_intra_stub = MagicMock()
+    mock_intra_stub.NotifyDecision.return_value = twopc_pb2.IntraDecisionAck(acknowledged=True)
+
+    with patch("grpc.insecure_channel"):
+        with patch.object(twopc_grpc, "TwoPhaseCommitServiceStub", return_value=mock_stub):
+            with patch.object(
+                twopc_grpc, "IntraNodePhaseServiceStub", return_value=mock_intra_stub
+            ):
+                result = srv.run_decision_phase("dave:pw", -1.0, -1.0, 20, votes)
+
+    assert result is False  # caller must NOT call state.update_user when False

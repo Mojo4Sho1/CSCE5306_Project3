@@ -18,7 +18,8 @@ MILESTONE: Q2
 OBJECTIVE: Implement 2PC decision phase — global-commit/abort, intra-node gRPC between phases, RPC logging.
 SPEC_DOC: docs/spec/03_2pc_contract.md
 PREREQUISITES: q1-2pc-voting
-READY: YES
+READY: DONE
+COMPLETED: 2026-03-24
 
 ## Queue Entry 3
 TASK_ID: q3-raft-election
@@ -26,7 +27,7 @@ MILESTONE: Q3
 OBJECTIVE: Implement Raft leader election — raft.proto, follower/candidate/leader state machine, RequestVote, heartbeat AppendEntries.
 SPEC_DOC: docs/spec/04_raft_election_contract.md
 PREREQUISITES: q2-2pc-decision
-READY: NO
+READY: YES
 
 ## Queue Entry 4
 TASK_ID: q4-raft-log-replication

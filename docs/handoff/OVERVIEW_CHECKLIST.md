@@ -21,9 +21,16 @@ PROJECT_PHASE: implementation-in-progress
 - EVIDENCE: `server/twopc.proto`, `server/twopc_pb2.py`, `server/twopc_pb2_grpc.py`, `server/server.py`, `tests/unit/test_2pc.py`
 
 ## C. Q2 — 2PC Decision Phase
-- STATUS: NOT_STARTED
+- STATUS: DONE
 - SPEC: `docs/spec/03_2pc_contract.md`
-- EXIT_CRITERIA: coordinator sends GlobalDecision, participants apply/discard, intra-node gRPC works, RPC logs in required format
+- EXIT_CRITERIA:
+  - [x] Coordinator sends GlobalDecision to all participants after vote collection
+  - [x] Participants apply `state.update_user` on global-commit, discard on global-abort
+  - [x] Coordinator's local update gated on unanimous commit
+  - [x] `IntraNodePhaseService.NotifyDecision` called on localhost with final decision
+  - [x] Q2 RPC log messages match required format (sender and receiver)
+  - [x] 26/26 unit tests pass; `make check` clean
+- EVIDENCE: `server/server.py` (run_decision_phase, GlobalDecision handler, UpdateLocation gating), `tests/unit/test_2pc.py` (tests 11–20)
 
 ## D. Q3 — Raft Leader Election
 - STATUS: NOT_STARTED
