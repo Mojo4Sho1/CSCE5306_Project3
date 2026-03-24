@@ -10,6 +10,8 @@ from concurrent import futures
 import fishing_pb2 as pb
 import fishing_pb2_grpc as grpc_stub
 import grpc
+import raft_node as raft_mod
+import raft_pb2_grpc as raft_grpc
 import twopc_pb2
 import twopc_pb2_grpc as twopc_grpc
 
@@ -367,6 +369,12 @@ def serve(port=50051, image_path="image.jpg"):  # <- accept an image path
     grpc_stub.add_FishingServiceServicer_to_server(FishingService(), server)
     twopc_grpc.add_TwoPhaseCommitServiceServicer_to_server(TwoPhaseCommitServicer(), server)
     twopc_grpc.add_IntraNodePhaseServiceServicer_to_server(IntraNodePhaseServicer(), server)
+
+    # Raft: instantiate node and register servicer
+    peers = [p.strip() for p in PEERS_STR.split(",") if p.strip()]
+    _raft_node = raft_mod.RaftNode(node_id=NODE_ID, peers=peers)
+    raft_grpc.add_RaftServiceServicer_to_server(raft_mod.RaftServicer(_raft_node), server)
+
     # Use the supplied port instead of hard‑coding it
     server.add_insecure_port(f"[::]:{port}")
     server.start()

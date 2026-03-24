@@ -33,9 +33,19 @@ PROJECT_PHASE: implementation-in-progress
 - EVIDENCE: `server/server.py` (run_decision_phase, GlobalDecision handler, UpdateLocation gating), `tests/unit/test_2pc.py` (tests 11–20)
 
 ## D. Q3 — Raft Leader Election
-- STATUS: NOT_STARTED
+- STATUS: DONE
 - SPEC: `docs/spec/04_raft_election_contract.md`
-- EXIT_CRITERIA: `raft.proto` compiled, all nodes start as followers, leader elected via RequestVote majority, heartbeat every 1s, election timeout [1.5s, 3s]
+- EXIT_CRITERIA:
+  - [x] `raft.proto` compiled (produces `raft_pb2.py` / `raft_pb2_grpc.py`)
+  - [x] All nodes start as followers (term 0, voted_for None)
+  - [x] Election timeout triggers candidate transition
+  - [x] Candidate sends RequestVote to all peers and collects majority → becomes leader
+  - [x] Leader sends heartbeat AppendEntries every 1 second
+  - [x] Followers reset election timer on valid AppendEntries
+  - [x] Higher-term messages cause step-down to follower
+  - [x] All RPC calls produce required log format (sender + receiver)
+  - [x] 40/40 unit tests pass; `make check` clean (2026-03-24)
+- EVIDENCE: `server/raft.proto`, `server/raft_pb2.py`, `server/raft_pb2_grpc.py`, `server/raft_node.py`, `server/server.py` (Raft wired in serve()), `tests/unit/test_raft.py` (14 tests)
 
 ## E. Q4 — Raft Log Replication
 - STATUS: NOT_STARTED

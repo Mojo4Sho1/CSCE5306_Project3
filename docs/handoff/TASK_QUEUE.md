@@ -27,7 +27,8 @@ MILESTONE: Q3
 OBJECTIVE: Implement Raft leader election — raft.proto, follower/candidate/leader state machine, RequestVote, heartbeat AppendEntries.
 SPEC_DOC: docs/spec/04_raft_election_contract.md
 PREREQUISITES: q2-2pc-decision
-READY: YES
+READY: DONE
+COMPLETED: 2026-03-24
 
 ## Queue Entry 4
 TASK_ID: q4-raft-log-replication
@@ -35,7 +36,7 @@ MILESTONE: Q4
 OBJECTIVE: Implement Raft log replication — log entries, full log on heartbeat, majority ACK commit, client forwarding.
 SPEC_DOC: docs/spec/05_raft_log_replication_contract.md
 PREREQUISITES: q3-raft-election
-READY: NO
+READY: YES
 
 ## Queue Entry 5
 TASK_ID: q5-failure-tests

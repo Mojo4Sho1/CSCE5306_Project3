@@ -42,9 +42,9 @@ The assignment has 5 implementation questions (Q1-Q5). All use gRPC for communic
 
 | Task | Assignment Q | Description | Status |
 |------|-------------|-------------|--------|
-| Q1 | 2PC Voting Phase | Proto + coordinator sends vote-request, participants respond vote-commit/vote-abort | NOT STARTED |
-| Q2 | 2PC Decision Phase | Coordinator sends global-commit/global-abort based on votes, intra-node gRPC between phases | NOT STARTED |
-| Q3 | Raft Leader Election | Proto + follower/candidate/leader state machine, RequestVote RPC, heartbeat via AppendEntries | NOT STARTED |
+| Q1 | 2PC Voting Phase | Proto + coordinator sends vote-request, participants respond vote-commit/vote-abort | COMPLETE |
+| Q2 | 2PC Decision Phase | Coordinator sends global-commit/global-abort based on votes, intra-node gRPC between phases | COMPLETE |
+| Q3 | Raft Leader Election | Proto + follower/candidate/leader state machine, RequestVote RPC, heartbeat via AppendEntries | COMPLETE |
 | Q4 | Raft Log Replication | Log entries, full log sent on heartbeat, ACK majority, client forwarding to leader | NOT STARTED |
 | Q5 | Failure Tests | 5 failure-related test cases with screenshots for report | NOT STARTED |
 
@@ -117,7 +117,7 @@ cd client && python3 client.py
 
 **Note on `make proto`:** Will fail until `server/2pc.proto` and `server/raft.proto` are created in Q1/Q3. That is expected — not a bug.
 
-**Note on `make typecheck`:** Not yet configured. Will be added in Q1 once typed implementation files exist.
+**Note on `make typecheck`:** Not configured. Skipped — ruff lint covers the critical checks.
 
 ## RPC Logging Formats (Assignment-Required)
 
@@ -187,6 +187,9 @@ Python cannot import a module whose name starts with a digit (`import 2pc_pb2` i
 
 ### Docker logs empty without `PYTHONUNBUFFERED=1`
 Python buffers stdout by default. In Docker without a TTY, `docker logs` will show nothing until the process exits. All services in `docker-compose.yml` set `PYTHONUNBUFFERED: "1"`. If you add a new service, include this env var or you will see no log output.
+
+### RaftNode background threads must be suppressed in unit tests
+`RaftNode.__init__` starts a daemon timer thread (and heartbeat thread when leader) that acquire the lock and fire RPCs. In unit tests, always pass `_start_threads=False` or tests will be flaky and `_become_leader` will spawn a live heartbeat thread. Example: `RaftNode(1, peers, _start_threads=False)`. This flag is already supported in `server/raft_node.py`.
 
 ---
 

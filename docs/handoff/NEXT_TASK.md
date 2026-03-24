@@ -4,14 +4,14 @@
 
 ## Task summary
 
-Implement Q3 (Raft leader election): create `raft.proto`, generate stubs, implement the follower/candidate/leader state machine in a new `raft_node.py` module, handle `RequestVote` and heartbeat `AppendEntries` RPCs, and register `RaftService` on the existing gRPC server.
+Implement Q4 (Raft log replication): extend the existing Raft implementation from Q3 to replicate `UpdateLocation` operations via the log. The leader appends entries to its log, sends the full log on each heartbeat, followers copy and execute committed entries, and non-leader nodes forward client requests to the leader.
 
-**Task queue reference:** q3-raft-election (see `docs/handoff/TASK_QUEUE.md`)
+**Task queue reference:** q4-raft-log-replication (see `docs/handoff/TASK_QUEUE.md`)
 
 ## Why this task is next
 
-- Q1 (2PC voting) and Q2 (2PC decision) are both COMPLETE — `twopc.proto`, all servicers, log formats, 26 unit tests, `make check` clean.
-- Q3 builds on the existing Docker/env-var setup (NODE_ID, PEERS) from 2PC — no compose changes needed.
+- Q3 (Raft leader election) is COMPLETE — `raft.proto`, `raft_node.py`, `RaftServicer`, all wired in `server.py`, 40 unit tests passing, `make check` clean.
+- Q4 extends the existing `AppendEntries` handler and `RaftNode` with log state; no new proto file needed (messages already defined in Q3).
 
 Long-horizon references:
 - `docs/handoff/OVERVIEW_CHECKLIST.md` (phase A–G status)
@@ -19,83 +19,77 @@ Long-horizon references:
 
 ## Recommended task order
 
-1. **Create `server/raft.proto`** — copy the proto definition from `docs/spec/04_raft_election_contract.md` exactly (do not modify it).
-2. **Generate stubs** — `cd server && python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. raft.proto` → produces `raft_pb2.py` / `raft_pb2_grpc.py`. Add a `proto-raft` target to `Makefile`.
-3. **Create `server/raft_node.py`** — implement `RaftNode` class (state machine) and `RaftServicer` (gRPC handler). Use the spec's `RaftNode.__init__` skeleton as the starting point.
-4. **Implement election timeout monitor** — background thread that promotes follower → candidate when no heartbeat received within `election_timeout` seconds (random [1.5, 3.0]).
-5. **Implement RequestVote handler** — vote logic per spec (term comparison, voted_for check). Log required format on both sender and receiver sides.
-6. **Implement AppendEntries handler (heartbeat)** — accept/reset timer on valid leader; entries is empty in Q3 (log replication is Q4). Log required format.
-7. **Implement heartbeat sender** — leader background thread sends AppendEntries to all peers every 1 second.
-8. **Wire into `server/server.py`** — import `raft_node`, instantiate `RaftNode`, register `RaftService`, start timer and heartbeat threads in `serve()`.
-9. **Add unit tests** — in `tests/unit/test_raft.py`: follower initial state, election timeout triggers candidacy, vote-grant/reject logic, majority-vote → leader, heartbeat resets timer, higher-term causes step-down. Minimum 8 tests.
+1. **Extend `RaftNode` state** — add `last_applied` and `pending_clients` dict to `__init__`. `log` and `commit_index` are already present from Q3.
+2. **Add `append_log_entry(operation)` method** — creates a `LogEntry`, appends to `self.log`, returns the new entry index.
+3. **Extend heartbeat sender** — populate `entries` (full log) and `commit_index` in `AppendEntriesRequest`.
+4. **Extend `AppendEntries` handler (follower side)** — replace log with received entries; execute all entries with `index <= commit_index` that have not yet been applied.
+5. **Track majority ACKs in leader** — after receiving `AppendEntriesResponse(success=True)`, increment ACK count for pending entries; commit when majority reached.
+6. **Implement `ForwardRequest` handler** — non-leader forwards to current `leader_id`'s address; logs required format.
+7. **Modify `FishingService.UpdateLocation`** — route through Raft log: if leader, call `append_log_entry` and wait for commit; if follower, call `ForwardRequest` to leader.
+8. **Add `get_leader_address()` helper** — maps `leader_id` to peer address using PEERS env var.
+9. **Add unit tests** — `tests/unit/test_raft_replication.py`: log append, follower copy, majority ACK commit, client forwarding stub. Minimum 8 tests.
 10. **Run `make check`** — lint + all tests must pass.
-11. **Validate with Docker** — `docker compose up --build`; confirm leader elected and heartbeat log lines appear.
+11. **Validate with Docker** — `make up`; issue UpdateLocation from client; confirm operation appears in all node logs.
 12. **Mandatory final subtask** — update handoff docs (see below).
 
-Steps 3–7 can be developed mostly in parallel; step 8 depends on 3–7.
+Steps 3–5 can be developed mostly in parallel; steps 6–7 depend on 3–5.
 
 ## Scope (in)
 
-- `server/raft.proto` with `RequestVote` and `AppendEntries` RPCs
-- Generated stubs `raft_pb2.py` / `raft_pb2_grpc.py`
-- `server/raft_node.py` — `RaftNode` class and `RaftServicer`
-- Follower/candidate/leader state machine with election timeout [1.5s, 3.0s] and heartbeat interval 1s
-- `RequestVote` RPC (election flow) and `AppendEntries` RPC (heartbeat only — no log entries)
-- RPC log messages in required format (sender and receiver)
-- `Makefile` `proto-raft` target
-- Unit tests (`tests/unit/test_raft.py`) — minimum 8 tests, no Docker required
+- Extended `server/raft_node.py`: `append_log_entry`, ACK tracking, `ForwardRequest` implementation
+- Extended `AppendEntries` handler: full log copy + execute committed entries
+- Modified heartbeat sender: send full log + commit_index
+- `FishingService.UpdateLocation` routed through Raft log
+- `get_leader_address()` helper
+- Unit tests (`tests/unit/test_raft_replication.py`) — minimum 8 tests, no Docker required
 - `make check` passes
 
 ## Scope (out)
 
-- Log replication (Q4) — `AppendEntries` carries no entries in Q3
-- Client forwarding to leader (Q4)
+- New proto file — all messages already defined in `raft.proto` from Q3
 - Failure tests (Q5)
-- Re-implementing 2PC — all Q1+Q2 code stays; Raft runs alongside it
+- Conflict resolution in log — spec says send full log, so follower simply replaces its log
 
 ## Dependencies / prerequisites
 
 - Quick orientation: `AGENTS.md` (read first), `docs/handoff/CURRENT_STATUS.md`
 - Environment setup: `requirements-dev.txt`, `Makefile`
 - Specs (read only what's needed):
-  - `docs/spec/04_raft_election_contract.md` — full Q3 spec (proto, state machine, timeouts, log format)
-- Inputs from prior phase: `server/server.py` (existing `serve()` function and env config), `server/docker-compose.yml` (NODE_ID, PEERS already set)
+  - `docs/spec/05_raft_log_replication_contract.md` — full Q4 spec (log structure, heartbeat extension, client forwarding, commit protocol)
+- Inputs from prior phase: `server/raft_node.py` (RaftNode + RaftServicer), `server/raft_pb2.py` / `server/raft_pb2_grpc.py`, `server/server.py` (RaftNode wired in serve())
 
 ## Implementation notes
 
-- **New module `raft_node.py`**: keep Raft logic out of `server.py`. Import and wire in `serve()`.
-- **Thread safety**: use `threading.Lock` on all shared Raft state (term, role, voted_for, last_heartbeat_time).
-- **Election timer thread**: check `time.time() - self.last_heartbeat_time > self.election_timeout` in a loop with small sleep (0.1s). On timeout, call `self.start_election()`.
-- **Heartbeat thread**: only runs when `self.role == "leader"`. Sleep 1s between rounds.
-- **Log format** (must match exactly):
-  - Sender: `Node <sender_id> sends RPC RequestVote to Node <receiver_id>`
-  - Receiver: `Node <receiver_id> runs RPC RequestVote called by Node <sender_id>`
-  - Same pattern for AppendEntries.
-- **PEERS env var format**: same `fishing2:50052,...` as 2PC. Reuse `peer_node_id()` helper from `server.py`.
+- **No new proto file**: `LogEntry`, `AppendEntriesRequest.entries`, `AppendEntriesRequest.commit_index`, and `ForwardRequest` messages are already defined in Q3's `raft.proto`.
+- **Full log on heartbeat**: the spec explicitly says send the entire log, not incremental entries. Followers replace their log wholesale.
+- **Majority definition**: `votes > total_nodes / 2` (same as election). For 6 nodes, need 4 ACKs (including leader).
+- **Blocking commit**: use `threading.Event` per pending entry index in `pending_clients`. Client blocks until event is set when entry is committed.
+- **ForwardRequest log format**:
+  - Sender: `Node <sender_id> sends RPC ForwardRequest to Node <leader_id>`
+  - Receiver: `Node <receiver_id> runs RPC ForwardRequest called by Node <sender_id>`
+- **AppendEntries ACK tracking**: the leader needs to count ACKs per log index across heartbeat rounds. A simple `dict[int, int]` of `{entry_index: ack_count}` works. Set `ack_count = 1` on entry creation (leader's self-ACK).
+- **`_start_threads=False`** in unit tests — same as Q3. Test log append, ACK counting, and commit logic directly without threads.
 - Run `make check` after every significant code change.
 
 ## Acceptance criteria (definition of done)
 
-- [ ] `server/raft.proto` exists with RequestVote and AppendEntries RPCs
-- [ ] Generated stubs compile without errors
-- [ ] All nodes start as followers
-- [ ] Election timeout triggers candidate transition
-- [ ] Candidate sends RequestVote and counts majority → becomes leader
-- [ ] Leader sends heartbeats every 1 second
-- [ ] Followers reset election timer on heartbeat receipt
-- [ ] Higher-term messages cause step-down to follower
+- [ ] Leader appends client requests to log as `<operation, term, index>`
+- [ ] Leader sends entire log + `commit_index` on each heartbeat
+- [ ] Followers copy entire log and execute all entries with `index <= commit_index`
+- [ ] Leader commits after receiving ACKs from majority (including self)
+- [ ] `commit_index` increments correctly after majority ACK
+- [ ] Non-leader nodes forward `UpdateLocation` to leader via `ForwardRequest`
 - [ ] All RPC calls produce the required log format
 - [ ] All unit tests pass (`make test`)
 - [ ] `make check` passes (lint + unit tests)
-- [ ] 5+ containerized nodes elect a leader (Docker validation)
 - [ ] Handoff docs updated (see mandatory final subtask below)
 
 ## Verification checklist
 
 - [ ] `make check` passes
 - [ ] `docker compose -f server/docker-compose.yml up --build` starts 5+ containers
-- [ ] Leader election log lines appear within 3 seconds of cluster start
-- [ ] Heartbeat `AppendEntries` log lines appear every ~1 second from leader
+- [ ] UpdateLocation from client propagates to all nodes (visible in docker logs)
+- [ ] Non-leader node correctly forwards location update to leader
 - [ ] No unresolved placeholder text in new code or docs
 
 ## Mandatory final subtask: Update handoff documentation
@@ -104,21 +98,21 @@ Steps 3–7 can be developed mostly in parallel; step 8 depends on 3–7.
 
 Using `docs/handoff/NEXT_TASK_TEMPLATE.md` as a guide, update the following before closing this batch:
 
-- [ ] Mark `q3-raft-election` as `done` in `docs/handoff/TASK_QUEUE.md`
-- [ ] Update Phase D status to `DONE` in `docs/handoff/OVERVIEW_CHECKLIST.md` and tick exit criteria
+- [ ] Mark `q4-raft-log-replication` as `done` in `docs/handoff/TASK_QUEUE.md`
+- [ ] Update Phase E status to `DONE` in `docs/handoff/OVERVIEW_CHECKLIST.md` and tick exit criteria
 - [ ] Rewrite `docs/handoff/CURRENT_STATUS.md`:
   - What was completed (concrete, verifiable — list files created/modified)
   - Checks run and their outcomes (`make check`, docker validation)
   - Any remaining blockers or caveats
 - [ ] Update `docs/handoff/BLOCKERS.md`: mark any blockers resolved this session; add any new unresolved blockers that need Joe's input
-- [ ] Rewrite `docs/handoff/NEXT_TASK.md` to brief the next agent on **Q4 (Raft log replication)**, following `docs/handoff/NEXT_TASK_TEMPLATE.md`
-  - Q4 subtasks: extend AppendEntries with log entries, majority-ACK commit, client forwarding to leader
-  - Reference `docs/spec/05_raft_log_replication_contract.md`
+- [ ] Rewrite `docs/handoff/NEXT_TASK.md` to brief the next agent on **Q5 (failure tests)**, following `docs/handoff/NEXT_TASK_TEMPLATE.md`
+  - Q5 subtasks: 5 failure scenarios from `docs/spec/06_failure_test_matrix.md`, Docker setup, screenshot capture
+  - Reference `docs/spec/06_failure_test_matrix.md`
 
 The next `NEXT_TASK.md` must itself include this same "Mandatory final subtask" section so the pattern propagates to every future agent.
 
 ## Risks / rollback notes
 
-- **Election storm on startup**: all nodes start simultaneously with overlapping timeouts. The [1.5s, 3.0s] range should stagger elections enough, but if all pick similar timeouts a split vote can repeat. Re-randomize timeout on each new election to resolve.
-- **gRPC channel reuse**: creating a new channel per RPC (as done in 2PC) is fine for correctness but slow. For Q3 heartbeats at 1s intervals it is acceptable — do not optimize unless timeouts occur.
-- **Thread lifecycle**: the heartbeat thread must check `self.role == "leader"` on each iteration and exit (or idle) if the node steps down. A stale heartbeat sender running on a follower will cause term confusion.
+- **Blocking client on commit**: if leader steps down before committing, waiting clients will hang. Add a timeout to `threading.Event.wait()` (e.g., 5 seconds) and return an error if the event is not set.
+- **ACK counting across heartbeats**: leader may receive ACKs for the same entry across multiple heartbeat rounds. The `ack_count` dict must deduplicate by `follower_id`, not just increment on every response.
+- **ForwardRequest races**: if leader steps down between when a follower identifies it and when it sends `ForwardRequest`, the RPC will fail. Handle `grpc.RpcError` and return an error to the client.

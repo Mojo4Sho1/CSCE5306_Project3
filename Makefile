@@ -1,4 +1,4 @@
-.PHONY: install lint format test test-smoke proto proto-2pc up down logs check
+.PHONY: install lint format test test-smoke proto proto-2pc proto-raft up down logs check
 
 COMPOSE_FILE := server/docker-compose.yml
 PYTHON       := python3
@@ -6,14 +6,13 @@ PYTHON       := python3
 install:
 	$(PYTHON) -m pip install -r requirements-dev.txt
 
-# Lint owned source files. server/server.py is included now that we extend it
-# with 2PC logic. client/client.py remains excluded (unmodified baseline).
-# Append new implementation files (server/raft.py, etc.) here as they are added.
+# Lint owned source files. server/server.py and server/raft_node.py are included.
+# client/client.py remains excluded (unmodified baseline).
 lint:
-	ruff check tests/ server/server.py
+	ruff check tests/ server/server.py server/raft_node.py
 
 format:
-	ruff format tests/ server/server.py
+	ruff format tests/ server/server.py server/raft_node.py
 
 test:
 	$(PYTHON) -m pytest -m "not smoke"
@@ -27,9 +26,12 @@ test-smoke:
 proto-2pc:
 	$(PYTHON) -m grpc_tools.protoc -I server --python_out=server --grpc_python_out=server server/twopc.proto
 
-# proto: regenerate all stubs (twopc + raft). raft.proto is added in Q3.
-proto: proto-2pc
+# proto-raft: regenerate stubs from raft.proto (Q3+).
+proto-raft:
 	$(PYTHON) -m grpc_tools.protoc -I server --python_out=server --grpc_python_out=server server/raft.proto
+
+# proto: regenerate all stubs (twopc + raft).
+proto: proto-2pc proto-raft
 
 up:
 	docker compose -f $(COMPOSE_FILE) up --build -d
