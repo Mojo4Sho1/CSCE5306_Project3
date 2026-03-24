@@ -76,6 +76,10 @@ The assignment has 5 implementation questions (Q1-Q5). All use gRPC for communic
 ├── servermono/             # Alternate variant (reference only, don't extend)
 └── docs/
     ├── _INDEX.md           # Documentation topic index
+    ├── report/
+    │   ├── report.tex          # LaTeX report scaffold (may move to Overleaf later)
+    │   ├── screenshots/        # Q5 PNG screenshots — tc1_*.png … tc5_*.png go here
+    │   └── q5_failure_tests.ipynb  # Jupyter notebook: runs Q5 tests, saves screenshots
     ├── spec/
     │   ├── 00_assignment_project3.md   # Full assignment requirements (authoritative)
     │   ├── 01_repo_baseline_audit.md   # Audited baseline state
@@ -106,16 +110,24 @@ make test         # run unit tests only (no Docker needed)
 make test-smoke   # run smoke tests (requires Docker cluster to be running)
 make lint         # ruff linter on owned source files
 make format       # ruff auto-formatter
-make proto        # regenerate stubs from 2pc.proto and raft.proto (Q1/Q3+)
+make proto        # regenerate stubs from twopc.proto and raft.proto (Q1/Q3+)
 make up           # docker compose up --build -d (6-node cluster)
 make down         # docker compose down
 make logs         # docker compose logs -f
+make pdf          # build docs/report/report.pdf (requires pdflatex on PATH)
 
 # Run client interactively (requires cluster to be up)
 cd client && python3 client.py
+
+# Run the Q5 failure-test notebook (requires Jupyter and a running cluster)
+jupyter notebook docs/report/q5_failure_tests.ipynb
 ```
 
-**Note on `make proto`:** Will fail until `server/2pc.proto` and `server/raft.proto` are created in Q1/Q3. That is expected — not a bug.
+**Note on `make proto`:** Will fail until `server/twopc.proto` and `server/raft.proto` are created in Q1/Q3. That is expected — not a bug.
+
+**Note on `make pdf`:** Requires `pdflatex` (install via `texlive-latex-base` or MacTeX). Screenshots must be placed in `docs/report/screenshots/` before building — the notebook (`q5_failure_tests.ipynb`) generates them automatically.
+
+**Note on the report:** `docs/report/report.tex` is the LaTeX source. Joe may move it to Overleaf later, in which case the `docs/report/` directory can be removed from the repo. Do not restructure it without Joe's approval.
 
 **Note on `make typecheck`:** Not configured. Skipped — ruff lint covers the critical checks.
 
