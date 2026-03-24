@@ -8,7 +8,7 @@ WORKDIR /app
 COPY . .
 
 # Install any required Python packages (adjust if you have more)
-RUN pip install --no-cache-dir grpcio protobuf
+RUN pip install --no-cache-dir grpcio protobuf grpcio-tools
 
 # Default command (overridden by compose `command`)
 CMD ["python", "server.py"]

@@ -1,7 +1,7 @@
 # Overview Checklist
 
-LAST_UPDATED: 2026-03-21
-PROJECT_PHASE: implementation-ready
+LAST_UPDATED: 2026-03-24
+PROJECT_PHASE: implementation-in-progress
 
 ## A. Seed and Planning
 - STATUS: DONE
@@ -9,9 +9,16 @@ PROJECT_PHASE: implementation-ready
 - EVIDENCE: `docs/spec/00-06`, `docs/handoff/DECISION_LOG.md`, `AGENTS.md`
 
 ## B. Q1 — 2PC Voting Phase
-- STATUS: NOT_STARTED
+- STATUS: DONE
 - SPEC: `docs/spec/03_2pc_contract.md`
-- EXIT_CRITERIA: `2pc.proto` compiled, coordinator sends VoteRequest, participants respond, 5+ Docker nodes communicate, RPC logs in required format
+- EXIT_CRITERIA:
+  - [x] `twopc.proto` compiled (renamed from 2pc.proto — Python import constraint)
+  - [x] Coordinator sends VoteRequest to all 5 participants and collects responses
+  - [x] Participants respond vote-commit/vote-abort (abort on negative coordinates)
+  - [x] Intra-node gRPC ReportVote works (voting → decision on localhost)
+  - [x] 6 Docker nodes communicate; RPC log lines in required format verified
+  - [x] 16/16 unit tests pass; `make check` clean
+- EVIDENCE: `server/twopc.proto`, `server/twopc_pb2.py`, `server/twopc_pb2_grpc.py`, `server/server.py`, `tests/unit/test_2pc.py`
 
 ## C. Q2 — 2PC Decision Phase
 - STATUS: NOT_STARTED

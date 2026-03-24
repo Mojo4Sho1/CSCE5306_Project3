@@ -1,7 +1,7 @@
 # Task Queue
 
-LAST_UPDATED: 2026-03-21
-QUEUE_PHASE: implementation-ready
+LAST_UPDATED: 2026-03-24
+QUEUE_PHASE: implementation-in-progress
 QUEUE_POLICY: Execute tasks in order Q1 → Q2 → Q3 → Q4 → Q5. Keep one `READY: YES` task at a time.
 
 ## Queue Entry 1
@@ -9,7 +9,8 @@ TASK_ID: q1-2pc-voting
 MILESTONE: Q1
 OBJECTIVE: Implement 2PC voting phase — proto, coordinator vote-request, participant vote-commit/abort, Docker 5+ nodes.
 SPEC_DOC: docs/spec/03_2pc_contract.md
-READY: YES
+READY: DONE
+COMPLETED: 2026-03-24
 
 ## Queue Entry 2
 TASK_ID: q2-2pc-decision
@@ -17,7 +18,7 @@ MILESTONE: Q2
 OBJECTIVE: Implement 2PC decision phase — global-commit/abort, intra-node gRPC between phases, RPC logging.
 SPEC_DOC: docs/spec/03_2pc_contract.md
 PREREQUISITES: q1-2pc-voting
-READY: NO
+READY: YES
 
 ## Queue Entry 3
 TASK_ID: q3-raft-election

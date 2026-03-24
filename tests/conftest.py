@@ -6,6 +6,7 @@ package prefix — they work when running from inside server/ but fail from repo
 root. We insert server/ at the front of sys.path here, before any test module
 is collected, so all bare imports resolve correctly throughout the test suite.
 """
+
 import os
 import sys
 from unittest.mock import MagicMock

@@ -1,35 +1,42 @@
 # Current Status
 
-LAST_UPDATED: 2026-03-21
-PROJECT_PHASE: implementation-ready
-REPO_BASELINE: forked upstream Python gRPC fishing prototype preserved under audit
-ACTIVE_PRIMARY_OBJECTIVE: implement Q1 (2PC voting phase)
+LAST_UPDATED: 2026-03-24
+PROJECT_PHASE: implementation-in-progress
+REPO_BASELINE: forked upstream Python gRPC fishing prototype — preserved, now extended with 2PC Q1
+ACTIVE_PRIMARY_OBJECTIVE: implement Q2 (2PC decision phase)
 STATUS_SUMMARY:
-- Seed bootstrap is COMPLETE. All planning docs are in place.
-- Implementation specs exist for 2PC (03), Raft election (04), Raft log replication (05), and failure tests (06).
-- All decisions are LOCKED (scope + proto organization).
-- No implementation has started yet. Q1 is the next task.
+- Q1 (2PC voting phase) is COMPLETE.
+- Files created/modified this session:
+  - CREATED: server/twopc.proto (proto definition for 2PC services)
+  - CREATED: server/twopc_pb2.py (generated — committed)
+  - CREATED: server/twopc_pb2_grpc.py (generated — committed)
+  - CREATED: tests/unit/test_2pc.py (10 unit tests for Q1)
+  - MODIFIED: server/server.py (added 2PC env config, TwoPhaseCommitServicer, IntraNodePhaseServicer, run_voting_phase, coordinator logic in UpdateLocation, servicer registration in serve())
+  - MODIFIED: server/docker-compose.yml (NODE_ID, IS_COORDINATOR, PEERS, PYTHONUNBUFFERED env vars on all 6 services)
+  - MODIFIED: server/dockerfile (added grpcio-tools to pip install)
+  - MODIFIED: Makefile (proto target uses twopc.proto; added proto-2pc target; lint now includes server/server.py)
+  - MODIFIED: docs/spec/03_2pc_contract.md (corrected 2pc.proto → twopc.proto naming throughout)
 QUALITY_GATES:
-- Baseline smoke validation: PASS - `docker compose -f server/docker-compose.yml config` and `python -m py_compile server/server.py client/client.py` succeeded on 2026-03-20.
-- Existing tests and/or smoke scripts: UNKNOWN - `fishing_test.js` exists but no automated test run was performed.
-- Optional type checking / linting: UNKNOWN - mypy/ruff/pytest config not detected.
-- Spec conformance check: PASS - all planning docs created and traceable.
-- Documentation + handoff updates: PASS - AGENTS.md rewritten, CLAUDE.md created, handoff docs updated.
+- make check: PASS — 16/16 unit tests pass (10 new 2PC tests + 6 baseline), ruff clean (2026-03-24)
+- docker compose config: PASS (2026-03-24)
+- docker compose up --build: PASS — 6 containers start (2026-03-24)
+- UpdateLocation RPC to Node 1: PASS — VoteRequest log lines appear for Nodes 2–6 (2026-03-24)
+- Negative-coordinate vote-abort: PASS — participant returns vote_commit=False with reason (2026-03-24)
+- Intra-node ReportVote log: PASS — appears in coordinator logs (2026-03-24)
 BLOCKERS: NONE
 DECISIONS_LOCKED:
-- Runtime code, generated protobuf files, and Docker topology remain preserved until implementation tasks modify them.
+- Proto file named twopc.proto (not 2pc.proto) — Python cannot import module names starting with a digit.
 - Project 3 scope is locked to replicated player state updates via location-update commands.
-- Proto organization: separate `2pc.proto` and `raft.proto` files; do not modify `fishing.proto`.
+- Proto organization: twopc.proto (done) and raft.proto (Q3). Do not modify fishing.proto.
 DECISIONS_PENDING: NONE
-RISKS_ACTIVE:
-- Scope creep beyond one functionality.
-NEXT_TASK_ID: q1-2pc-voting
-ACTIVE_QUEUE_TASK_ID: q1-2pc-voting
+RISKS_ACTIVE: NONE
+NEXT_TASK_ID: q2-2pc-decision
+ACTIVE_QUEUE_TASK_ID: q2-2pc-decision
 OPEN_DECISIONS_COUNT: 0
 NEXT_TASK_READY: YES
 REQUIRED_REFERENCES:
 1. `AGENTS.md` (primary agent guide)
-2. `docs/spec/03_2pc_contract.md` (for Q1)
+2. `docs/spec/03_2pc_contract.md` (same spec — Q2 decision-phase sections)
 3. `docs/handoff/NEXT_TASK.md`
 4. `docs/handoff/TASK_QUEUE.md`
 HANDOFF_INSTRUCTIONS:

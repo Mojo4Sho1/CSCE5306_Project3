@@ -176,6 +176,20 @@ For each task, read the corresponding spec doc before implementing:
 - Validate Docker config with `docker compose config` after any compose file changes (or rely on `make up` which will surface errors).
 - Keep the test/build infrastructure working at all times — a broken `make check` blocks all future agents.
 
+## Known Gotchas (discovered during implementation — read before starting)
+
+These were found the hard way. Do not repeat them.
+
+**Agent responsibility:** If you discover a new gotcha while implementing your task, add it here before closing your session — same format as below. Future agents read this file first, so this is the highest-visibility place to leave a warning. Also log it in `docs/handoff/BLOCKERS.md` per the Blocker Handling Protocol below.
+
+### Proto file cannot be named `2pc.proto`
+Python cannot import a module whose name starts with a digit (`import 2pc_pb2` is a syntax error). The proto file is named **`twopc.proto`** and generates **`twopc_pb2.py`** / **`twopc_pb2_grpc.py`**. The spec originally said `2pc.proto` — that spec has been corrected. Do not rename the file.
+
+### Docker logs empty without `PYTHONUNBUFFERED=1`
+Python buffers stdout by default. In Docker without a TTY, `docker logs` will show nothing until the process exits. All services in `docker-compose.yml` set `PYTHONUNBUFFERED: "1"`. If you add a new service, include this env var or you will see no log output.
+
+---
+
 ## Blocker Handling Protocol
 
 When you hit a blocker during implementation, follow the path below. All entries go in `docs/handoff/BLOCKERS.md` using the template format in that file.

@@ -6,9 +6,11 @@ Implement Two-Phase Commit (2PC) for replicated player location updates. When a 
 
 **Traceability**: S00-M05, S00-M06, S00-M07, S00-M08
 
-## Proto Definition: `2pc.proto`
+## Proto Definition: `twopc.proto`
 
-Create a new file `server/2pc.proto`:
+**Filename note**: The file is named `twopc.proto` (not `2pc.proto`). Python cannot import a module whose name starts with a digit — `import 2pc_pb2` is a syntax error. Using `twopc.proto` generates `twopc_pb2.py` / `twopc_pb2_grpc.py`, which import cleanly.
+
+Create a new file `server/twopc.proto`:
 
 ```protobuf
 syntax = "proto3";
@@ -98,14 +100,14 @@ message IntraVoteAck {
 
 ## Generate stubs
 
-After creating `2pc.proto`, generate Python stubs:
+After creating `twopc.proto`, generate Python stubs:
 
 ```bash
 cd server
-python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. 2pc.proto
+python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. twopc.proto
 ```
 
-This produces `twopc_pb2.py` and `twopc_pb2_grpc.py` (or `2pc_pb2.py` / `2pc_pb2_grpc.py` depending on protoc naming — adjust imports accordingly).
+This produces `twopc_pb2.py` and `twopc_pb2_grpc.py`.
 
 **Dockerfile update**: Add `grpcio-tools` to pip install, or pre-generate stubs and copy them in.
 
@@ -170,7 +172,7 @@ Phase decision of Node 2 sends RPC NotifyDecision to Phase voting of Node 2
 
 ## Integration with Existing Server
 
-- Modify `server/server.py` to import 2PC stubs and register `TwoPhaseCommitService` + `IntraNodePhaseService` on the gRPC server.
+- Modify `server/server.py` to import `twopc_pb2` / `twopc_pb2_grpc` and register `TwoPhaseCommitService` + `IntraNodePhaseService` on the gRPC server.
 - The `UpdateLocation` handler should trigger the 2PC coordinator flow (if this node is the coordinator) or participate in voting (if this node is a participant).
 - Each node needs to know the addresses of all other nodes. Use environment variables or a config list (e.g., `PEERS=fishing2:50051,fishing3:50051,...`).
 - Update `server/docker-compose.yml` to pass peer addresses as environment variables.
@@ -185,7 +187,7 @@ Update `server/docker-compose.yml`:
 
 ## Acceptance Criteria
 
-- [ ] `2pc.proto` exists with all required messages and services
+- [ ] `twopc.proto` exists with all required messages and services
 - [ ] Generated stubs compile without errors
 - [ ] Coordinator sends VoteRequest to all participants and collects responses
 - [ ] Coordinator sends GlobalDecision based on unanimous vote

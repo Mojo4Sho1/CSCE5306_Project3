@@ -11,6 +11,7 @@ No Docker required. All tests run via: make test
 Import note: conftest.py inserts server/ into sys.path, so fishing_pb2 and
 other server/ modules are importable directly (not via `from server import ...`).
 """
+
 import fishing_pb2 as pb
 import pytest
 from google.protobuf import empty_pb2
@@ -60,10 +61,12 @@ def test_add_user_and_count(fresh_state):
 
 def test_update_location_stores_coords(servicer, fresh_state):
     """UpdateLocation stream persists x/y coordinates into ServerState."""
-    requests = iter([
-        pb.UpdateLocationRequest(jwt="alice:secret", x=3.5, y=7.2),
-        pb.UpdateLocationRequest(jwt="alice:secret", x=10.0, y=20.0),
-    ])
+    requests = iter(
+        [
+            pb.UpdateLocationRequest(jwt="alice:secret", x=3.5, y=7.2),
+            pb.UpdateLocationRequest(jwt="alice:secret", x=10.0, y=20.0),
+        ]
+    )
     resp = servicer.UpdateLocation(requests, mock_context())
 
     assert resp.success is True

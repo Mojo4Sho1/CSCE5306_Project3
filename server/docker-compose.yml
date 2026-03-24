@@ -9,6 +9,11 @@ services:
     command: ["python", "server.py", "50051", "1.JPG"]
     ports:
       - "50051:50051"
+    environment:
+      NODE_ID: "1"
+      IS_COORDINATOR: "true"
+      PEERS: "fishing2:50052,fishing3:50053,fishing4:50054,fishing5:50055,fishing6:50056"
+      PYTHONUNBUFFERED: "1"
     restart: unless-stopped
     deploy:
       resources:
@@ -20,6 +25,11 @@ services:
     command: ["python", "server.py", "50052", "2.JPG"]
     ports:
       - "50052:50052"
+    environment:
+      NODE_ID: "2"
+      IS_COORDINATOR: "false"
+      PEERS: ""
+      PYTHONUNBUFFERED: "1"
     restart: unless-stopped
     deploy:
       resources:
@@ -31,6 +41,11 @@ services:
     command: ["python", "server.py", "50053", "3.JPG"]
     ports:
       - "50053:50053"
+    environment:
+      NODE_ID: "3"
+      IS_COORDINATOR: "false"
+      PEERS: ""
+      PYTHONUNBUFFERED: "1"
     restart: unless-stopped
     deploy:
       resources:
@@ -42,6 +57,11 @@ services:
     command: ["python", "server.py", "50054", "4.JPG"]
     ports:
       - "50054:50054"
+    environment:
+      NODE_ID: "4"
+      IS_COORDINATOR: "false"
+      PEERS: ""
+      PYTHONUNBUFFERED: "1"
     restart: unless-stopped
     deploy:
       resources:
@@ -53,6 +73,11 @@ services:
     command: ["python", "server.py", "50055", "5.JPG"]
     ports:
       - "50055:50055"
+    environment:
+      NODE_ID: "5"
+      IS_COORDINATOR: "false"
+      PEERS: ""
+      PYTHONUNBUFFERED: "1"
     restart: unless-stopped
     deploy:
       resources:
@@ -64,6 +89,11 @@ services:
     command: ["python", "server.py", "50056", "6.JPG"]
     ports:
       - "50056:50056"
+    environment:
+      NODE_ID: "6"
+      IS_COORDINATOR: "false"
+      PEERS: ""
+      PYTHONUNBUFFERED: "1"
     restart: unless-stopped
     deploy:
       resources:

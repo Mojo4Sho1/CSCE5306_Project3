@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package twopc;
+
+// ============================================================
+// Inter-node 2PC RPCs (coordinator <-> participants)
+// ============================================================
+
+service TwoPhaseCommitService {
+  // Q1: Voting Phase
+  rpc VoteRequest (VoteRequestMessage) returns (VoteResponse);
+
+  // Q2: Decision Phase
+  rpc GlobalDecision (DecisionMessage) returns (DecisionAck);
+}
+
+// ============================================================
+// Intra-node RPCs (voting phase <-> decision phase on same node)
+// Assignment requires gRPC between phases even within one container.
+// ============================================================
+
+service IntraNodePhaseService {
+  // Decision phase notifies voting phase of the final outcome
+  rpc NotifyDecision (IntraDecisionNotification) returns (IntraDecisionAck);
+
+  // Voting phase reports its vote to the decision phase
+  rpc ReportVote (IntraVoteReport) returns (IntraVoteAck);
+}
+
+// ============================================================
+// Messages
+// ============================================================
+
+message LocationUpdate {
+  string user_jwt = 1;
+  double x = 2;
+  double y = 3;
+}
+
+message VoteRequestMessage {
+  int32 coordinator_id = 1;
+  int32 transaction_id = 2;
+  LocationUpdate proposed_update = 3;
+}
+
+message VoteResponse {
+  int32 participant_id = 1;
+  int32 transaction_id = 2;
+  bool vote_commit = 3;       // true = vote-commit, false = vote-abort
+  string reason = 4;           // reason for abort, if any
+}
+
+message DecisionMessage {
+  int32 coordinator_id = 1;
+  int32 transaction_id = 2;
+  bool global_commit = 3;      // true = global-commit, false = global-abort
+  LocationUpdate update = 4;   // the update to apply (if committing)
+}
+
+message DecisionAck {
+  int32 participant_id = 1;
+  int32 transaction_id = 2;
+  bool applied = 3;
+}
+
+// Intra-node messages
+message IntraDecisionNotification {
+  int32 transaction_id = 1;
+  bool global_commit = 2;
+}
+
+message IntraDecisionAck {
+  bool acknowledged = 1;
+}
+
+message IntraVoteReport {
+  int32 transaction_id = 1;
+  bool vote_commit = 2;
+}
+
+message IntraVoteAck {
+  bool acknowledged = 1;
+}

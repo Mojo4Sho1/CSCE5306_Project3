@@ -6,6 +6,7 @@ work end-to-end over a live gRPC connection. Run with: make test-smoke
 
 All tests are tagged @pytest.mark.smoke and are excluded from make test / make check.
 """
+
 import os
 import subprocess
 import sys
@@ -23,6 +24,7 @@ PRIMARY_ADDR = "localhost:50051"
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _wait_for_grpc(address: str, timeout: int = 30) -> None:
     """Poll until a gRPC channel is ready or timeout expires."""
@@ -44,6 +46,7 @@ def _wait_for_grpc(address: str, timeout: int = 30) -> None:
 # Session-scoped cluster fixture
 # Starts Docker cluster once for all smoke tests; tears it down after.
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="session", autouse=False)
 def docker_cluster():
@@ -86,6 +89,7 @@ def stub(docker_cluster):
 # Smoke tests
 # ---------------------------------------------------------------------------
 
+
 def test_cluster_is_up(docker_cluster):
     """Primary port (50051) is reachable after docker compose up."""
     _wait_for_grpc(PRIMARY_ADDR, timeout=5)  # already up; just a quick confirm
@@ -104,10 +108,12 @@ def test_update_location_rpc_works(stub):
     import fishing_pb2 as pb  # noqa: PLC0415
 
     jwt = "smokeuser:smokepass"
-    requests = iter([
-        pb.UpdateLocationRequest(jwt=jwt, x=1.0, y=2.0),
-        pb.UpdateLocationRequest(jwt=jwt, x=3.0, y=4.0),
-    ])
+    requests = iter(
+        [
+            pb.UpdateLocationRequest(jwt=jwt, x=1.0, y=2.0),
+            pb.UpdateLocationRequest(jwt=jwt, x=3.0, y=4.0),
+        ]
+    )
     resp = stub.UpdateLocation(requests)
     assert resp.success is True
 

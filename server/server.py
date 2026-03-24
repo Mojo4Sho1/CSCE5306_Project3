@@ -1,22 +1,38 @@
 #!/usr/bin/env python3
 # server.py
 
-import time
+import os
 import random
 import threading
+import time
 from concurrent import futures
 
-import grpc
 import fishing_pb2 as pb
 import fishing_pb2_grpc as grpc_stub
+import grpc
+import twopc_pb2
+import twopc_pb2_grpc as twopc_grpc
+
+# ----------------------------------------------------------------------
+# 2PC environment configuration
+# ----------------------------------------------------------------------
+NODE_ID = int(os.environ.get("NODE_ID", "1"))
+PEERS_STR = os.environ.get("PEERS", "")
+IS_COORDINATOR = os.environ.get("IS_COORDINATOR", "false").lower() == "true"
+PORT = 50051  # updated by serve() at startup
+
+# Transaction ID counter (coordinator only)
+_tx_counter = 0
+_tx_lock = threading.Lock()
+
 
 # ----------------------------------------------------------------------
 # In‑memory state (protected by a lock)
 # ----------------------------------------------------------------------
 class ServerState:
     def __init__(self):
-        self.users = {}          # jwt -> pb.User
-        self.inventory = {}      # jwt -> list[Fish]
+        self.users = {}  # jwt -> pb.User
+        self.inventory = {}  # jwt -> list[Fish]
         self.user_id_seq = 1
         self.lock = threading.Lock()
 
@@ -63,7 +79,124 @@ class ServerState:
                 all_fishes.extend(fishes)
             return all_fishes
 
+
 state = ServerState()
+
+# ----------------------------------------------------------------------
+# 2PC helpers (module-level so unit tests can import them directly)
+# ----------------------------------------------------------------------
+
+
+def next_transaction_id() -> int:
+    """Return a monotonically increasing transaction ID (thread-safe)."""
+    global _tx_counter
+    with _tx_lock:
+        _tx_counter += 1
+        return _tx_counter
+
+
+def peer_node_id(peer_addr: str) -> int:
+    """Extract numeric node ID from a peer address like 'fishing3:50053'."""
+    hostname = peer_addr.split(":")[0]  # e.g. 'fishing3'
+    return int(hostname.replace("fishing", ""))
+
+
+def run_voting_phase(jwt: str, x: float, y: float, transaction_id: int) -> list:
+    """Coordinator: send VoteRequest to all peers, then call intra-node ReportVote.
+
+    Returns the list of VoteResponse messages collected from participants.
+    """
+    peers = [p.strip() for p in PEERS_STR.split(",") if p.strip()]
+    proposed = twopc_pb2.LocationUpdate(user_jwt=jwt, x=x, y=y)
+    votes = []
+
+    for peer in peers:
+        pid = peer_node_id(peer)
+        # Sender-side log (assignment-required format)
+        print(f"Phase voting of Node {NODE_ID} sends RPC VoteRequest to Phase voting of Node {pid}")
+        try:
+            channel = grpc.insecure_channel(peer)
+            stub = twopc_grpc.TwoPhaseCommitServiceStub(channel)
+            resp = stub.VoteRequest(
+                twopc_pb2.VoteRequestMessage(
+                    coordinator_id=NODE_ID,
+                    transaction_id=transaction_id,
+                    proposed_update=proposed,
+                )
+            )
+            votes.append(resp)
+        except grpc.RpcError as exc:
+            print(f"[2PC] VoteRequest to {peer} failed: {exc}")
+
+    # Intra-node gRPC: voting phase → decision phase (same container, localhost)
+    all_commit = all(v.vote_commit for v in votes) if votes else True
+    print(
+        f"Phase voting of Node {NODE_ID} sends RPC ReportVote to Phase decision of Node {NODE_ID}"
+    )
+    try:
+        channel = grpc.insecure_channel(f"localhost:{PORT}")
+        intra_stub = twopc_grpc.IntraNodePhaseServiceStub(channel)
+        intra_stub.ReportVote(
+            twopc_pb2.IntraVoteReport(
+                transaction_id=transaction_id,
+                vote_commit=all_commit,
+            )
+        )
+    except grpc.RpcError as exc:
+        print(f"[2PC] Intra-node ReportVote failed: {exc}")
+
+    return votes
+
+
+# ----------------------------------------------------------------------
+# 2PC servicers
+# ----------------------------------------------------------------------
+
+
+class TwoPhaseCommitServicer(twopc_grpc.TwoPhaseCommitServiceServicer):
+    """Handles inter-node 2PC RPCs. All nodes register this (participant role)."""
+
+    def VoteRequest(self, request, context):
+        # Receiver-side log (assignment uses same "sends RPC" wording as sender)
+        print(
+            f"Phase voting of Node {NODE_ID} sends RPC VoteRequest"
+            f" to Phase voting of Node {request.coordinator_id}"
+        )
+        update = request.proposed_update
+        if update.x < 0 or update.y < 0:
+            return twopc_pb2.VoteResponse(
+                participant_id=NODE_ID,
+                transaction_id=request.transaction_id,
+                vote_commit=False,
+                reason=f"Negative coordinates: x={update.x}, y={update.y}",
+            )
+        return twopc_pb2.VoteResponse(
+            participant_id=NODE_ID,
+            transaction_id=request.transaction_id,
+            vote_commit=True,
+            reason="",
+        )
+
+    def GlobalDecision(self, request, context):
+        # Q2 placeholder — decision phase not yet implemented
+        return twopc_pb2.DecisionAck(
+            participant_id=NODE_ID,
+            transaction_id=request.transaction_id,
+            applied=False,
+        )
+
+
+class IntraNodePhaseServicer(twopc_grpc.IntraNodePhaseServiceServicer):
+    """Handles intra-node gRPC between voting and decision phases."""
+
+    def ReportVote(self, request, context):
+        # Q1: decision phase receives aggregated vote; Q2 will act on it
+        return twopc_pb2.IntraVoteAck(acknowledged=True)
+
+    def NotifyDecision(self, request, context):
+        # Q2 placeholder
+        return twopc_pb2.IntraDecisionAck(acknowledged=True)
+
 
 # ----------------------------------------------------------------------
 # Service implementation
@@ -90,24 +223,27 @@ class FishingService(grpc_stub.FishingServiceServicer):
         context.add_callback(cleanup)
 
         for req in request_iterator:
-            if not jwt:          # first message establishes the user
+            if not jwt:  # first message establishes the user
                 jwt = req.jwt
                 added = state.add_user(jwt)
                 if added:
                     print(f"[UPDATE] New user stream opened: {jwt}")
 
+            if IS_COORDINATOR:
+                tx_id = next_transaction_id()
+                run_voting_phase(req.jwt, req.x, req.y, tx_id)
+
             # Keep the user's location up to date
+            # (Q2 will gate this on GlobalDecision; for Q1 we update locally)
             state.update_user(jwt, req.x, req.y)
 
         # No explicit call to cleanup() is needed – it will run automatically.
         return pb.UpdateLocationResponse(success=True)
 
-
     # ---------- ListUsers (server‑stream) ----------
     def ListUsers(self, request, context):
         for user in state.get_user_snapshot():
             yield user
-
 
     # ---------- StartFishing (server‑stream) ----------
     def StartFishing(self, request, context):
@@ -124,8 +260,8 @@ class FishingService(grpc_stub.FishingServiceServicer):
             if random.random() < chance:
                 fish = pb.Fish(
                     fish_id=random.randint(1000, 9999),
-                    fish_dna=f"DNA{random.randint(100000,999999)}",
-                    fish_level=random.randint(1, 10)
+                    fish_dna=f"DNA{random.randint(100000, 999999)}",
+                    fish_level=random.randint(1, 10),
                 )
                 state.add_fish_to_user(jwt, fish)
                 print(f"[FISH] User {jwt} caught fish {fish.fish_id}")
@@ -157,19 +293,23 @@ class FishingService(grpc_stub.FishingServiceServicer):
             image_bytes = f.read()
         return pb.ImageResponse(image_data=image_bytes)
 
+
 # ----------------------------------------------------------------------
 # Server bootstrap
 # ----------------------------------------------------------------------
-def serve(port=50051, image_path="image.jpg"):          # <- accept an image path
-    global IMAGE_PATH
+def serve(port=50051, image_path="image.jpg"):  # <- accept an image path
+    global IMAGE_PATH, PORT
     IMAGE_PATH = image_path  # set the global to the provided argument
+    PORT = port  # expose port for intra-node gRPC calls
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     grpc_stub.add_FishingServiceServicer_to_server(FishingService(), server)
+    twopc_grpc.add_TwoPhaseCommitServiceServicer_to_server(TwoPhaseCommitServicer(), server)
+    twopc_grpc.add_IntraNodePhaseServiceServicer_to_server(IntraNodePhaseServicer(), server)
     # Use the supplied port instead of hard‑coding it
     server.add_insecure_port(f"[::]:{port}")
     server.start()
-    print(f"FishingService gRPC server listening on port {port}…")
+    print(f"Server listening on port {port} (NODE_ID={NODE_ID}, IS_COORDINATOR={IS_COORDINATOR})")
     try:
         while True:
             time.sleep(86400)
@@ -177,8 +317,10 @@ def serve(port=50051, image_path="image.jpg"):          # <- accept an image pat
         print("Shutting down server…")
         server.stop(0)
 
+
 if __name__ == "__main__":
     import sys
+
     # Read optional port and image path from command‑line; default to 50051 and "image.jpg" if omitted
     try:
         cmd_port = int(sys.argv[1])
