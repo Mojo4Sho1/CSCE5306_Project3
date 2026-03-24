@@ -11,6 +11,7 @@ import fishing_pb2 as pb
 import fishing_pb2_grpc as grpc_stub
 import grpc
 import raft_node as raft_mod
+import raft_pb2
 import raft_pb2_grpc as raft_grpc
 import twopc_pb2
 import twopc_pb2_grpc as twopc_grpc
@@ -22,6 +23,9 @@ NODE_ID = int(os.environ.get("NODE_ID", "1"))
 PEERS_STR = os.environ.get("PEERS", "")
 IS_COORDINATOR = os.environ.get("IS_COORDINATOR", "false").lower() == "true"
 PORT = 50051  # updated by serve() at startup
+
+# Q4: module-level reference to the RaftNode, set in serve()
+raft_node: raft_mod.RaftNode = None  # type: ignore[assignment]
 
 # Transaction ID counter (coordinator only)
 _tx_counter = 0
@@ -260,6 +264,54 @@ class IntraNodePhaseServicer(twopc_grpc.IntraNodePhaseServiceServicer):
 
 
 # ----------------------------------------------------------------------
+# Q4 Raft helper
+# ----------------------------------------------------------------------
+
+
+def _raft_update_location(jwt: str, x: float, y: float) -> None:
+    """Route an UpdateLocation through the Raft log.
+
+    If this node is the leader: append to log, wait for commit (majority ACK).
+    If this node is a follower: forward to the current leader via ForwardRequest RPC.
+    Falls back to a direct state update with a warning if Raft is unavailable.
+    """
+    with raft_node._lock:
+        role = raft_node.role
+        leader_addr = raft_node.get_leader_address()
+        leader_id = raft_node.leader_id
+        node_id = raft_node.node_id
+
+    if role == "leader":
+        with raft_node._lock:
+            index = raft_node.append_log_entry(f"UpdateLocation:{jwt}:{x}:{y}")
+        committed = raft_node.wait_for_commit(index)
+        if not committed:
+            print(f"[RAFT] Commit timeout for index {index}; applying locally as fallback")
+            state.update_user(jwt, x, y)
+    elif leader_addr is not None:
+        print(f"Node {node_id} sends RPC ForwardRequest to Node {leader_id}")
+        try:
+            channel = grpc.insecure_channel(leader_addr)
+            stub = raft_grpc.RaftServiceStub(channel)
+            stub.ForwardRequest(
+                raft_pb2.ForwardRequestMessage(
+                    user_jwt=jwt,
+                    x=x,
+                    y=y,
+                    sender_id=NODE_ID,
+                ),
+                timeout=6.0,
+            )
+        except grpc.RpcError as exc:
+            print(f"[RAFT] ForwardRequest to leader failed: {exc}; applying locally")
+            state.update_user(jwt, x, y)
+    else:
+        # No leader known (election in progress); apply directly with a warning
+        print(f"[RAFT] No leader known on Node {node_id}; applying locally as fallback")
+        state.update_user(jwt, x, y)
+
+
+# ----------------------------------------------------------------------
 # Service implementation
 # ----------------------------------------------------------------------
 class FishingService(grpc_stub.FishingServiceServicer):
@@ -291,13 +343,17 @@ class FishingService(grpc_stub.FishingServiceServicer):
                     print(f"[UPDATE] New user stream opened: {jwt}")
 
             if IS_COORDINATOR:
+                # 2PC path: coordinator drives voting + decision phases
                 tx_id = next_transaction_id()
                 votes = run_voting_phase(req.jwt, req.x, req.y, tx_id)
                 global_commit = run_decision_phase(req.jwt, req.x, req.y, tx_id, votes)
                 if global_commit:
                     state.update_user(jwt, req.x, req.y)
+            elif raft_node is not None:
+                # Q4 Raft path: route through log replication
+                _raft_update_location(req.jwt, req.x, req.y)
             else:
-                # Non-coordinator: accept location update directly (testing convenience)
+                # Fallback (raft not yet initialised — shouldn't happen in prod)
                 state.update_user(jwt, req.x, req.y)
 
         # No explicit call to cleanup() is needed – it will run automatically.
@@ -370,10 +426,13 @@ def serve(port=50051, image_path="image.jpg"):  # <- accept an image path
     twopc_grpc.add_TwoPhaseCommitServiceServicer_to_server(TwoPhaseCommitServicer(), server)
     twopc_grpc.add_IntraNodePhaseServiceServicer_to_server(IntraNodePhaseServicer(), server)
 
-    # Raft: instantiate node and register servicer
+    # Q4: Raft — instantiate node (module-level so UpdateLocation can access it)
+    global raft_node
     peers = [p.strip() for p in PEERS_STR.split(",") if p.strip()]
-    _raft_node = raft_mod.RaftNode(node_id=NODE_ID, peers=peers)
-    raft_grpc.add_RaftServiceServicer_to_server(raft_mod.RaftServicer(_raft_node), server)
+    raft_node = raft_mod.RaftNode(node_id=NODE_ID, peers=peers)
+    raft_grpc.add_RaftServiceServicer_to_server(
+        raft_mod.RaftServicer(raft_node, apply_fn=state.update_user), server
+    )
 
     # Use the supplied port instead of hard‑coding it
     server.add_insecure_port(f"[::]:{port}")

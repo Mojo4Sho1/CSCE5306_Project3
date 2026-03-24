@@ -61,6 +61,7 @@ message ForwardRequestMessage {
   string user_jwt = 1;
   double x = 2;
   double y = 3;
+  int32 sender_id = 4;  // node ID of the forwarding non-leader (Q4 log format)
 }
 
 message ForwardRequestResponse {

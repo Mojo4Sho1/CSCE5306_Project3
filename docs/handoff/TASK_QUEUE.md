@@ -36,7 +36,8 @@ MILESTONE: Q4
 OBJECTIVE: Implement Raft log replication — log entries, full log on heartbeat, majority ACK commit, client forwarding.
 SPEC_DOC: docs/spec/05_raft_log_replication_contract.md
 PREREQUISITES: q3-raft-election
-READY: YES
+READY: DONE
+COMPLETED: 2026-03-24
 
 ## Queue Entry 5
 TASK_ID: q5-failure-tests
@@ -44,7 +45,7 @@ MILESTONE: Q5
 OBJECTIVE: Design and execute 5 failure-related Raft test cases with screenshot evidence.
 SPEC_DOC: docs/spec/06_failure_test_matrix.md
 PREREQUISITES: q4-raft-log-replication
-READY: NO
+READY: YES
 
 ## Queue Entry 6
 TASK_ID: final-deliverables

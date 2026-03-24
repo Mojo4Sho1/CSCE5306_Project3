@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nraft.proto\x12\x04raft\"g\n\x12RequestVoteRequest\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\x14\n\x0c\x63\x61ndidate_id\x18\x02 \x01(\x05\x12\x16\n\x0elast_log_index\x18\x03 \x01(\x05\x12\x15\n\rlast_log_term\x18\x04 \x01(\x05\"K\n\x13RequestVoteResponse\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\x14\n\x0cvote_granted\x18\x02 \x01(\x08\x12\x10\n\x08voter_id\x18\x03 \x01(\x05\":\n\x08LogEntry\x12\x11\n\toperation\x18\x01 \x01(\t\x12\x0c\n\x04term\x18\x02 \x01(\x05\x12\r\n\x05index\x18\x03 \x01(\x05\"n\n\x14\x41ppendEntriesRequest\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\x11\n\tleader_id\x18\x02 \x01(\x05\x12\x1f\n\x07\x65ntries\x18\x03 \x03(\x0b\x32\x0e.raft.LogEntry\x12\x14\n\x0c\x63ommit_index\x18\x04 \x01(\x05\"K\n\x15\x41ppendEntriesResponse\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\x0f\n\x07success\x18\x02 \x01(\x08\x12\x13\n\x0b\x66ollower_id\x18\x03 \x01(\x05\"?\n\x15\x46orwardRequestMessage\x12\x10\n\x08user_jwt\x18\x01 \x01(\t\x12\t\n\x01x\x18\x02 \x01(\x01\x12\t\n\x01y\x18\x03 \x01(\x01\":\n\x16\x46orwardRequestResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t2\xe8\x01\n\x0bRaftService\x12\x42\n\x0bRequestVote\x12\x18.raft.RequestVoteRequest\x1a\x19.raft.RequestVoteResponse\x12H\n\rAppendEntries\x12\x1a.raft.AppendEntriesRequest\x1a\x1b.raft.AppendEntriesResponse\x12K\n\x0e\x46orwardRequest\x12\x1b.raft.ForwardRequestMessage\x1a\x1c.raft.ForwardRequestResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nraft.proto\x12\x04raft\"g\n\x12RequestVoteRequest\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\x14\n\x0c\x63\x61ndidate_id\x18\x02 \x01(\x05\x12\x16\n\x0elast_log_index\x18\x03 \x01(\x05\x12\x15\n\rlast_log_term\x18\x04 \x01(\x05\"K\n\x13RequestVoteResponse\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\x14\n\x0cvote_granted\x18\x02 \x01(\x08\x12\x10\n\x08voter_id\x18\x03 \x01(\x05\":\n\x08LogEntry\x12\x11\n\toperation\x18\x01 \x01(\t\x12\x0c\n\x04term\x18\x02 \x01(\x05\x12\r\n\x05index\x18\x03 \x01(\x05\"n\n\x14\x41ppendEntriesRequest\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\x11\n\tleader_id\x18\x02 \x01(\x05\x12\x1f\n\x07\x65ntries\x18\x03 \x03(\x0b\x32\x0e.raft.LogEntry\x12\x14\n\x0c\x63ommit_index\x18\x04 \x01(\x05\"K\n\x15\x41ppendEntriesResponse\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\x0f\n\x07success\x18\x02 \x01(\x08\x12\x13\n\x0b\x66ollower_id\x18\x03 \x01(\x05\"R\n\x15\x46orwardRequestMessage\x12\x10\n\x08user_jwt\x18\x01 \x01(\t\x12\t\n\x01x\x18\x02 \x01(\x01\x12\t\n\x01y\x18\x03 \x01(\x01\x12\x11\n\tsender_id\x18\x04 \x01(\x05\":\n\x16\x46orwardRequestResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t2\xe8\x01\n\x0bRaftService\x12\x42\n\x0bRequestVote\x12\x18.raft.RequestVoteRequest\x1a\x19.raft.RequestVoteResponse\x12H\n\rAppendEntries\x12\x1a.raft.AppendEntriesRequest\x1a\x1b.raft.AppendEntriesResponse\x12K\n\x0e\x46orwardRequest\x12\x1b.raft.ForwardRequestMessage\x1a\x1c.raft.ForwardRequestResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -42,9 +42,9 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_APPENDENTRIESRESPONSE']._serialized_start=374
   _globals['_APPENDENTRIESRESPONSE']._serialized_end=449
   _globals['_FORWARDREQUESTMESSAGE']._serialized_start=451
-  _globals['_FORWARDREQUESTMESSAGE']._serialized_end=514
-  _globals['_FORWARDREQUESTRESPONSE']._serialized_start=516
-  _globals['_FORWARDREQUESTRESPONSE']._serialized_end=574
-  _globals['_RAFTSERVICE']._serialized_start=577
-  _globals['_RAFTSERVICE']._serialized_end=809
+  _globals['_FORWARDREQUESTMESSAGE']._serialized_end=533
+  _globals['_FORWARDREQUESTRESPONSE']._serialized_start=535
+  _globals['_FORWARDREQUESTRESPONSE']._serialized_end=593
+  _globals['_RAFTSERVICE']._serialized_start=596
+  _globals['_RAFTSERVICE']._serialized_end=828
 # @@protoc_insertion_point(module_scope)

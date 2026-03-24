@@ -48,9 +48,18 @@ PROJECT_PHASE: implementation-in-progress
 - EVIDENCE: `server/raft.proto`, `server/raft_pb2.py`, `server/raft_pb2_grpc.py`, `server/raft_node.py`, `server/server.py` (Raft wired in serve()), `tests/unit/test_raft.py` (14 tests)
 
 ## E. Q4 — Raft Log Replication
-- STATUS: NOT_STARTED
+- STATUS: DONE
 - SPEC: `docs/spec/05_raft_log_replication_contract.md`
-- EXIT_CRITERIA: log entries replicated on heartbeat, majority ACK commits, client forwarding to leader, state consistent across nodes
+- EXIT_CRITERIA:
+  - [x] Leader appends client requests to log as `<operation, term, index>`
+  - [x] Leader sends entire log + commit_index on each heartbeat (AppendEntries)
+  - [x] Followers replace entire log and execute committed entries via apply_fn callback
+  - [x] Leader commits after receiving ACKs from majority (ack_tracker set per entry)
+  - [x] commit_index increments correctly after majority ACK; pending client event set
+  - [x] Non-leader nodes forward UpdateLocation to leader via ForwardRequest RPC
+  - [x] All RPC calls produce required log format (sender + receiver)
+  - [x] 55/55 unit tests pass; `make check` clean (2026-03-24)
+- EVIDENCE: `server/raft_node.py` (LogEntry, append_log_entry, _record_ack, wait_for_commit, get_leader_address, ForwardRequest handler), `server/raft.proto` (sender_id added to ForwardRequestMessage), `server/server.py` (_raft_update_location, UpdateLocation routing, raft_node global), `tests/unit/test_raft_replication.py` (15 tests)
 
 ## F. Q5 — Failure Tests
 - STATUS: NOT_STARTED
