@@ -47,5 +47,7 @@ check: lint test
 
 # Build the PDF report (requires pdflatex on PATH).
 # Screenshots must be placed in docs/report/screenshots/ before building.
+# If pdflatex is not available locally, upload docs/report/ to Overleaf.
 pdf:
+	@command -v pdflatex >/dev/null 2>&1 || { echo "pdflatex not found — install TeX Live or use Overleaf (upload docs/report/)."; exit 1; }
 	cd docs/report && pdflatex -interaction=nonstopmode report.tex && pdflatex -interaction=nonstopmode report.tex

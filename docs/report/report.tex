@@ -332,11 +332,18 @@ The client can resume \rpc{UpdateLocation} requests via the new leader (or via f
 from any remaining follower).
 
 \paragraph{Observed behaviour.}
-\todo{Fill in after running the test. Note which node was killed, how long re-election took, and whether the client resumed successfully.}
+Node 2 was the initial leader (term 1).
+After stopping its container, Node 6 was the first to time out and sent \rpc{RequestVote}
+to all remaining nodes.
+The remaining followers (Nodes 1, 3, 4, 5) all granted their votes because their
+\texttt{current\_term} was still 1; Node 6 collected a 5-vote majority and became
+leader for term 2 in approximately 2--3 seconds.
+Node 6 immediately began sending \rpc{AppendEntries} heartbeats to the survivors,
+and all five nodes transitioned to follower state under the new leader.
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=\linewidth]{screenshots/tc1_leader_crash.png}
+  \includegraphics[width=\linewidth]{screenshots/tc1_tc1_leader_crash_and_re_election.png}
   \caption{TC1 --- terminal output showing leader crash, election process, and resumed operations.}
   \label{fig:tc1}
 \end{figure}
@@ -361,11 +368,16 @@ the remaining four (majority of six).  When the follower restarts it receives th
 leader log on the next heartbeat and catches up to the current \texttt{commit\_index}.
 
 \paragraph{Observed behaviour.}
-\todo{Fill in after running the test. Note how many updates were sent while the follower was down and confirm the restarted follower's log matched the leader's log.}
+Node 5 was the leader; Node 1 (a follower) was stopped.
+While Node 1 was down the leader continued sending \rpc{AppendEntries} heartbeats to the
+remaining five nodes, reaching a majority without Node 1.
+When Node 1 was restarted, it logged \texttt{Server listening\ldots} and immediately
+began receiving \rpc{AppendEntries} from Node 5, catching up to the current log state.
+No re-election occurred because the majority (five of six nodes) was always intact.
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=\linewidth]{screenshots/tc2_follower_recovery.png}
+  \includegraphics[width=\linewidth]{screenshots/tc2_tc2_follower_crash_and_recovery.png}
   \caption{TC2 --- logs showing continued operation during follower absence and log catch-up after restart.}
   \label{fig:tc2}
 \end{figure}
@@ -391,11 +403,18 @@ On unpause the node receives an \rpc{AppendEntries} heartbeat, discovers the cur
 and syncs its log.  A stale leader that unpauses steps down upon seeing a higher term.
 
 \paragraph{Observed behaviour.}
-\todo{Fill in after running the test. State whether the leader or a follower was paused and describe the observed resynchronisation.}
+Node 5 (the leader) was paused.
+The five surviving nodes detected the missing heartbeat and Node 6 won the resulting
+election, becoming leader for term 2.
+When Node 5 was unpaused, it resumed its stale heartbeat loop (still in term 1) and
+sent \rpc{AppendEntries} to surviving nodes.
+Upon receiving an \rpc{AppendEntries} from the new leader (Node 6, term 2), Node 5
+saw a higher term, stepped down to follower, and began tracking Node 6 as leader.
+The cluster stabilised with Node 6 as the sole leader for term 2.
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=\linewidth]{screenshots/tc3_partition.png}
+  \includegraphics[width=\linewidth]{screenshots/tc3_tc3_network_partition_pause_unpause.png}
   \caption{TC3 --- terminal output showing the pause, cluster reaction, unpause, and resynchronisation.}
   \label{fig:tc3}
 \end{figure}
@@ -420,11 +439,17 @@ applies all committed entries, and joins the cluster with its state consistent w
 other nodes.
 
 \paragraph{Observed behaviour.}
-\todo{Fill in after running the test. Confirm that fishing6 received AppendEntries and that its log matched the leader's log.}
+Node 4 was elected leader of the initial five-node cluster (term 1).
+After starting \texttt{fishing6} with \texttt{docker compose up -d fishing6},
+the new node logged \texttt{Server listening\ldots} and within the next heartbeat
+interval (at most 1 second) received its first \rpc{AppendEntries} from Node 4.
+The leader's log shows \texttt{Node 4 sends RPC AppendEntries to Node 6} added to
+its heartbeat round immediately, confirming that Node 6 was included in the cluster
+without any manual configuration step.
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=\linewidth]{screenshots/tc4_new_node.png}
+  \includegraphics[width=\linewidth]{screenshots/tc4_tc4_new_node_joining_the_cluster.png}
   \caption{TC4 --- logs showing the new node startup, log sync via AppendEntries, and cluster membership.}
   \label{fig:tc4}
 \end{figure}
@@ -450,11 +475,24 @@ a leader.  Each candidate re-randomises its election timeout and starts a new el
 with an incremented term.  Eventually one candidate wins a majority and becomes leader.
 
 \paragraph{Observed behaviour.}
-\todo{Fill in after running the test. If a genuine split vote was not observed, describe the election timeout mechanism from the logs (different timeouts per node) and show that multiple terms were observed before a leader was elected.}
+Node 2 (leader, term 1) and Node 3 (follower) were stopped simultaneously, leaving
+four nodes (1, 4, 5, 6).
+A majority of the 6-node cluster requires 4 votes.
+\textbf{Term 2 --- split vote}: Nodes 5 and 6 both timed out and started elections for
+term 2 at nearly the same moment.  Each voted for itself and sent \rpc{RequestVote}
+to the others; the four available votes were split roughly evenly between the two
+candidates and neither reached the 4-vote threshold.
+\textbf{Term 3 --- retry and resolution}: Node 5 re-randomised its election timeout and
+started a second election.  Logs show Node 5 sending \rpc{RequestVote} a second time
+(\texttt{Node 5 sends RPC RequestVote to Node 1/2/3/4/6} repeated twice total) and
+collecting a majority; Node 5 became leader for term 3.
+The logs show Nodes 1 and 4 receiving \rpc{RequestVote} from both Node 6 (term 2) and
+Node 5 (terms 2 and 3), confirming that multiple election rounds occurred before a
+leader was established.
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=\linewidth]{screenshots/tc5_split_vote.png}
+  \includegraphics[width=\linewidth]{screenshots/tc5_tc5_split_vote_and_election_retry.png}
   \caption{TC5 --- logs showing multiple \rpc{RequestVote} rounds, term increments, and final leader selection.}
   \label{fig:tc5}
 \end{figure}
@@ -509,6 +547,11 @@ make down
     background election-timer and heartbeat threads; without this flag tests are flaky.
   \item The Raft implementation uses a simplified protocol that sends the entire log on
     every heartbeat rather than incremental entries; followers replace their log wholesale.
+  \item The \texttt{PEERS} environment variable must be set for \emph{every} node, not
+    only the coordinator.  An initial misconfiguration left \texttt{PEERS=""} for nodes
+    2--6; each node then treated itself as a single-node cluster and ``won'' every
+    election with one self-vote.  The fix sets the full peer list for all six services
+    in \texttt{docker-compose.yml}.
 \end{itemize}
 
 \subsection{External Sources}

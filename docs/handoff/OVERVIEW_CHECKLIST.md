@@ -1,7 +1,7 @@
 # Overview Checklist
 
-LAST_UPDATED: 2026-03-24
-PROJECT_PHASE: implementation-in-progress
+LAST_UPDATED: 2026-03-25
+PROJECT_PHASE: final-deliverables
 
 ## A. Seed and Planning
 - STATUS: DONE
@@ -62,13 +62,24 @@ PROJECT_PHASE: implementation-in-progress
 - EVIDENCE: `server/raft_node.py` (LogEntry, append_log_entry, _record_ack, wait_for_commit, get_leader_address, ForwardRequest handler), `server/raft.proto` (sender_id added to ForwardRequestMessage), `server/server.py` (_raft_update_location, UpdateLocation routing, raft_node global), `tests/unit/test_raft_replication.py` (15 tests)
 
 ## F. Q5 — Failure Tests
-- STATUS: NOT_STARTED
+- STATUS: DONE
 - SPEC: `docs/spec/06_failure_test_matrix.md`
-- EXIT_CRITERIA: 5 failure test cases executed, screenshots captured, documented for report
+- EXIT_CRITERIA:
+  - [x] TC1: Leader crash and re-election — Node 2 killed; Node 6 elected leader (term 2) in ~2-3 s
+  - [x] TC2: Follower crash and recovery — Node 1 stopped; cluster continued; Node 1 synced on restart via AppendEntries
+  - [x] TC3: Network partition (pause/unpause) — Node 5 (leader) paused; Node 6 elected (term 2); Node 5 stepped down on unpause after seeing higher term
+  - [x] TC4: New node joining — 5-node cluster (Node 4 leader); fishing6 added; received AppendEntries within 1 heartbeat cycle and synced
+  - [x] TC5: Split vote and retry — Nodes 2 + 3 killed; Nodes 5 and 6 both started term-2 elections (split); Node 5 won term 3 on retry
+  - [x] 5 raw log files in `docs/report/logs/tc{1-5}_raw.txt`
+  - [x] 5 PNG screenshots in `docs/report/screenshots/tc{1-5}_*.png`
+  - [x] Observed behaviour filled in `docs/report/report.tex` (all TC `\todo{}` replaced)
+  - [x] Bug fixed: `PEERS: ""` for nodes 2-6 in docker-compose.yml — each node now has its full peer list
+  - [x] `make check` still passes (55/55 tests, lint clean) after docker-compose.yml fix
+- EVIDENCE: `docs/report/logs/`, `docs/report/screenshots/`, `docs/report/report.tex`, `server/docker-compose.yml`
 
 ## G. Final Deliverables
 - STATUS: NOT_STARTED
-- EXIT_CRITERIA: README complete (build/run, unusual notes, sources, GitHub link), report complete (team members, IDs, work division, screenshots, GitHub link), zip submitted
+- EXIT_CRITERIA: README complete (build/run, unusual notes, sources, GitHub link), report complete (team members, IDs, work division, AI lessons-learned section), PDF compiled (Overleaf or TeX Live), zip submitted
 
 ## Update Rules
 - Only set `DONE` when exit criteria and evidence are both present.

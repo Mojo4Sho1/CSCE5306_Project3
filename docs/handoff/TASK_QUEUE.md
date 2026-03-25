@@ -1,6 +1,6 @@
 # Task Queue
 
-LAST_UPDATED: 2026-03-24
+LAST_UPDATED: 2026-03-25
 QUEUE_PHASE: implementation-in-progress
 QUEUE_POLICY: Execute tasks in order Q1 → Q2 → Q3 → Q4 → Q5. Keep one `READY: YES` task at a time.
 
@@ -45,14 +45,15 @@ MILESTONE: Q5
 OBJECTIVE: Design and execute 5 failure-related Raft test cases with screenshot evidence.
 SPEC_DOC: docs/spec/06_failure_test_matrix.md
 PREREQUISITES: q4-raft-log-replication
-READY: YES
+READY: DONE
+COMPLETED: 2026-03-25
 
 ## Queue Entry 6
 TASK_ID: final-deliverables
 MILESTONE: DELIVERY
-OBJECTIVE: Update README with build/run instructions, create final report, zip and submit.
+OBJECTIVE: Update README with build/run instructions, fill remaining report.tex \todo{} items (student IDs, work division, AI lessons-learned section), compile PDF via Overleaf or local TeX Live, and zip/submit.
 PREREQUISITES: q5-failure-tests
-READY: NO
+READY: YES
 
 ## Queue Update Rules
 - Keep one and only one queue entry with `READY: YES`.

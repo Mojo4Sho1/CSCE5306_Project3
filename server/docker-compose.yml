@@ -28,7 +28,7 @@ services:
     environment:
       NODE_ID: "2"
       IS_COORDINATOR: "false"
-      PEERS: ""
+      PEERS: "fishing1:50051,fishing3:50053,fishing4:50054,fishing5:50055,fishing6:50056"
       PYTHONUNBUFFERED: "1"
     restart: unless-stopped
     deploy:
@@ -44,7 +44,7 @@ services:
     environment:
       NODE_ID: "3"
       IS_COORDINATOR: "false"
-      PEERS: ""
+      PEERS: "fishing1:50051,fishing2:50052,fishing4:50054,fishing5:50055,fishing6:50056"
       PYTHONUNBUFFERED: "1"
     restart: unless-stopped
     deploy:
@@ -60,7 +60,7 @@ services:
     environment:
       NODE_ID: "4"
       IS_COORDINATOR: "false"
-      PEERS: ""
+      PEERS: "fishing1:50051,fishing2:50052,fishing3:50053,fishing5:50055,fishing6:50056"
       PYTHONUNBUFFERED: "1"
     restart: unless-stopped
     deploy:
@@ -76,7 +76,7 @@ services:
     environment:
       NODE_ID: "5"
       IS_COORDINATOR: "false"
-      PEERS: ""
+      PEERS: "fishing1:50051,fishing2:50052,fishing3:50053,fishing4:50054,fishing6:50056"
       PYTHONUNBUFFERED: "1"
     restart: unless-stopped
     deploy:
@@ -92,7 +92,7 @@ services:
     environment:
       NODE_ID: "6"
       IS_COORDINATOR: "false"
-      PEERS: ""
+      PEERS: "fishing1:50051,fishing2:50052,fishing3:50053,fishing4:50054,fishing5:50055"
       PYTHONUNBUFFERED: "1"
     restart: unless-stopped
     deploy:
