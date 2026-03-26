@@ -1,47 +1,20 @@
-# MMO Fishing Game gRPC Prototype
+# CSCE 5306 Project 3 — Distributed Consensus (2PC + Raft)
 
-This repository contains a Python gRPC prototype for a fishing-game service with
-two checked-in deployment variants:
+**GitHub:** <https://github.com/Mojo4Sho1/CSCE5306_Project3>
 
-- `server/`: a six-instance Docker Compose deployment using the same service on
-  ports `50051` through `50056`
-- `servermono/`: an alternate baseline variant with a separate copy of the
-  runtime and compose files
+This project extends a baseline multiplayer fishing game (Python gRPC, 6-node
+Docker cluster) with two distributed consensus algorithms:
 
-The current baseline is a prototype service surface. The checked-in runtime does
-not yet implement Project 3 consensus logic.
+- **Two-Phase Commit (2PC)** — coordinator-driven voting and decision phases
+  for atomic location updates (Q1 + Q2).
+- **Raft** — leader election with randomised timeouts and log replication with
+  majority commit (Q3 + Q4).
+- **Failure Tests** — five fault-tolerance scenarios exercising leader crash,
+  follower crash, network partition, new-node join, and split-vote re-election
+  (Q5).
 
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Project Structure](#project-structure)
-  - [`client/`](#client)
-  - [`server/`](#server)
-  - [`servermono/`](#servermono)
-- [Running the Code](#running-the-code)
-  - [Client](#client-1)
-  - [6‑Node Server Cluster](#6-node-server-cluster)
-  - [Single‑Node (Mono) Server](#single-node-mono-server)
-- [Performance Benchmarks](#performance-benchmarks)
-  - [6‑Node System](#6-node-system)
-  - [1‑Node System](#1-node-system)
-- [gRPC Service Definition](#grpc-service-definition)
-- [Future Work](#future-work)
-- [License](#license)
-
----
-
-## Overview
-
-- **Runtime** - Python gRPC server and client with generated protobuf stubs.
-- **Cluster variant** - `server/` starts six identical service instances on
-  separate ports.
-- **Baseline state** - user and inventory data are stored in memory inside each
-  running server process.
-- **Testing** - `fishing_test.js` contains a k6 load-test script for the
-  baseline service surface.
+The final written report is maintained separately in Overleaf and is
+intentionally not versioned in this repository.
 
 ---
 
@@ -49,159 +22,135 @@ not yet implement Project 3 consensus logic.
 
 ```
 .
-├── client/          # Simple test client (Python)
-├── server/          # 6‑node cluster implementation
-│   └── docker-compose.yml
-├── servermono/      # Alternate baseline server variant
-│   └── docker-compose.yml
-├── fishing_test.js  # k6 load‑testing script
-└── fishing.proto    # gRPC service definitions
+├── client/                  # Interactive Python client
+│   └── client.py
+├── server/                  # 6-node cluster implementation
+│   ├── server.py            # Main server (2PC + Raft + fishing service)
+│   ├── raft_node.py         # Raft state machine and gRPC servicer
+│   ├── fishing.proto        # Baseline fishing service (unmodified)
+│   ├── twopc.proto          # 2PC gRPC service definitions
+│   ├── raft.proto           # Raft gRPC service definitions
+│   ├── docker-compose.yml   # 6-node Docker Compose cluster
+│   └── Dockerfile
+├── tests/
+│   ├── unit/                # 55 unit tests (no Docker required)
+│   └── smoke/               # Docker integration tests
+├── Makefile                 # Build, test, and cluster management
+└── AGENTS.md                # Full project context and architecture
 ```
 
-### `client/`
+---
 
-A minimal interactive Python client that can:
-- log in
-- send location updates
-- start a fishing stream
-- list users
-- stream current-user counts
-- fetch inventory
-- fetch the configured image bytes
+## How to Compile and Run
 
-**Run**
+### Prerequisites
+
+- Python 3.11+
+- Docker & Docker Compose
+- GNU Make
+
+### Quick Start
 
 ```bash
-cd client
-python3 client.py
+# Install Python dependencies
+make install
+
+# (Optional) Regenerate gRPC stubs from proto files
+make proto
+
+# Run unit tests (no Docker required) — 55 tests
+make test
+
+# Run the full quality gate
+make check
+
+# Start the 6-node Docker cluster
+make up
+
+# Run the interactive client (cluster must be running)
+cd client && python3 client.py
+
+# Stream logs from all nodes
+make logs
+
+# Tear down the cluster
+make down
 ```
 
-### `server/`
+### Other Make Targets
 
-A six-service Docker Compose setup. Each service runs `server.py` with a unique
-port and image path. Each running process keeps its own in-memory state.
-
-**Run**
-
-```bash
-cd server
-docker compose up
-```
-
-### `servermono/`
-
-An alternate baseline server variant stored in its own directory. Its compose
-file defines one service named `fishing-cluster` and exposes ports
-`50051-50056`.
-
-**Run**
-
-```bash
-cd servermono
-docker compose up
-```
+| Target          | Description                              |
+|-----------------|------------------------------------------|
+| `make lint`     | Run ruff linter                          |
+| `make format`   | Auto-format with ruff                    |
+| `make check`    | Quality gate (lint + unit tests)         |
+| `make proto-2pc`| Regenerate only 2PC stubs                |
+| `make proto-raft`| Regenerate only Raft stubs              |
+| `make test-smoke`| Run Docker integration tests            |
 
 ---
 
-## Running the Code
+## Where To Look In The Demo
 
-1. **Prerequisites**
+- `server/server.py`: main gRPC server, baseline `FishingService`, 2PC servicers,
+  cluster wiring, and the `UpdateLocation` integration point.
+- `server/raft_node.py`: Raft state machine, leader election, heartbeat loop,
+  log replication, commit tracking, and the `RaftService` gRPC handlers.
+- `server/twopc.proto`: 2PC RPC/message contract (`VoteRequest`,
+  `GlobalDecision`, intra-node `ReportVote` / `NotifyDecision`).
+- `server/raft.proto`: Raft RPC/message contract (`RequestVote`,
+  `AppendEntries`, `ForwardRequest`, `LogEntry`).
+- `tests/unit/test_2pc.py`: 2PC voting/decision behavior and abort-path tests.
+- `tests/unit/test_raft.py`: election and timeout behavior tests.
+- `tests/unit/test_raft_replication.py`: log replication, majority ACK, commit,
+  and forwarding tests.
 
-   * Docker & Docker Compose
-   * Python 3 with `grpcio` and `protobuf` available for the client
+## What Changed From The Baseline
 
-2. **Start the Servers**
+- Added `server/twopc.proto` plus generated 2PC stubs.
+- Added `server/raft.proto` plus generated Raft stubs.
+- Added `server/raft_node.py` for the Raft state machine and gRPC servicer.
+- Extended `server/server.py` to host 2PC services, wire in Raft, and route
+  `UpdateLocation` through the new consensus logic.
+- Extended `server/docker-compose.yml` so all six nodes have explicit `NODE_ID`,
+  `PEERS`, and unbuffered logging configuration.
+- Added unit tests for 2PC, Raft election, and Raft replication behavior.
 
-   ```bash
-   # 6‑node cluster
-   cd server && docker compose up
+## Unusual Notes
 
-   # or single node
-   cd servermono && docker compose up
-   ```
+- **Proto file naming:** The 2PC proto file is named `twopc.proto` (not
+  `2pc.proto`). Python cannot import a module whose name starts with a digit;
+  `grpc_tools.protoc` would generate `2pc_pb2.py`, which is an invalid Python
+  identifier.
 
-3. **Run the Client**
+- **Docker log buffering:** All containers set `PYTHONUNBUFFERED=1` to prevent
+  Python's default stdout buffering from suppressing log output in
+  `docker logs`.
 
-   ```bash
-   cd client && python3 client.py
-   ```
+- **PEERS environment variable:** The `PEERS` variable must be set for *every*
+  node, not only the coordinator. An initial misconfiguration left `PEERS=""`
+  for nodes 2–6, causing each node to treat itself as a single-node cluster.
 
-4. **Load‑Test with k6**
+- **Simplified Raft log replication:** The Raft implementation sends the entire
+  log on every heartbeat rather than incremental entries. Followers replace
+  their log wholesale. This is a simplification from the full Raft protocol.
 
-   ```bash
-   brew install k6          # macOS; adjust for your OS
-   k6 run fishing_test.js
-   ```
+- **Unit test threading:** Tests pass `_start_threads=False` to `RaftNode` to
+  suppress background election-timer and heartbeat threads; without this flag
+  tests are flaky.
 
----
-
-## Performance Benchmarks
-
-### 6‑Node System
-
-```
-iteration_duration...........: avg=1.01s  min=1s       med=1.01s  max=1.05s   p(90)=1.02s   p(95)=1.03s  
-iterations...................: 1000   98.283894/s
-vus..........................: 100    min=100      max=100
-grpc_req_duration............: avg=7.73ms  min=806.29µs med=6.65ms max=31.33ms p(90)=14.17ms p(95)=17.01ms
-grpc_streams.................: 1000   98.283894/s
-grpc_streams_msgs_received...: 1000   98.283894/s
-grpc_streams_msgs_sent.......: 5000   491.419472/s
-```
-
-### 1‑Node System
-
-```
-iteration_duration...........: avg=1.02s  min=1s       med=1s     max=1.2s     p(90)=1.08s   p(95)=1.1s  
-iterations...................: 1000   96.866251/s
-vus..........................: 100    min=100      max=100
-grpc_req_duration............: avg=13.4ms  min=596.66µs med=3.61ms max=176.58ms p(90)=59.39ms p(95)=79.6ms
-grpc_streams.................: 1000   96.866251/s
-grpc_streams_msgs_received...: 1000   96.866251/s
-grpc_streams_msgs_sent.......: 5000   484.331254/s
-```
-
-> **Takeaway** – Horizontal scaling reduces request latency by ~40 % and increases throughput.
+- **Report location:** The final report is maintained in Overleaf and is not
+  included in this repository.
 
 ---
 
-## gRPC Service Definition
+## External Sources
 
-```proto
-syntax = "proto3";
-
-package fishingapp;
-
-import "google/protobuf/empty.proto";
-
-service FishingService {
-  rpc ListUsers (google.protobuf.Empty) returns (stream User);
-  rpc Login (LoginRequest) returns (LoginResponse);
-  rpc UpdateLocation (stream UpdateLocationRequest) returns (UpdateLocationResponse);
-  rpc StartFishing (StartFishingRequest) returns (stream Fish);
-  rpc CurrentUsers (EmptyRequest) returns (stream CurrentUsersResponse);
-  rpc Inventory (InventoryRequest) returns (InventoryResponse);
-  rpc GetImage (ImageRequest) returns (ImageResponse);
-}
-```
-
-- **Login** - unary RPC that returns a token composed from username and password.
-- **UpdateLocation** - client-streaming RPC that registers a user and updates
-  `(x, y)` coordinates.
-- **ListUsers** - server-streaming RPC that returns the current user snapshot.
-- **StartFishing** - server-streaming RPC that emits caught fish, if any.
-- **CurrentUsers** - server-streaming RPC that emits the current count and later
-  count changes.
-- **Inventory** - unary RPC that returns the in-memory fish inventory.
-- **GetImage** - unary RPC that returns the bytes from the configured image
-  file.
-
----
-
-## Future Work
-
-1. **Persistence Layer** – Integrate PocketBase (or another database) for durable storage and centralized data.  
-2. **Dynamic Server Discovery** – Given an (x, y) coordinate, route the client to the responsible tile server.  
-3. **Multi‑Server Client** – Build a client that can subscribe to multiple servers simultaneously, enabling seamless map rendering across tiles.  
-4. **Load Balancing & Auto‑Scaling** – Use a service mesh or Kubernetes to automatically scale nodes based on player density.  
-5. **Security Enhancements** – Token‑based auth, rate limiting, and data validation.
+- Ongaro, D. and Ousterhout, J. (2014). *In Search of an Understandable
+  Consensus Algorithm (Extended Version)*. USENIX ATC.
+  <https://raft.github.io/raft.pdf>
+- Gray, J. and Lamport, L. (2006). Consensus on Transaction Commit. *ACM
+  Transactions on Database Systems*, 31(1):133–160.
+- gRPC Python documentation: <https://grpc.io/docs/languages/python/>
+- Protocol Buffers language guide (proto3):
+  <https://protobuf.dev/programming-guides/proto3/>

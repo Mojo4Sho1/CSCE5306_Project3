@@ -23,8 +23,8 @@ The assignment has 5 implementation questions (Q1-Q5). All use gRPC for communic
 - **Scope**: All 2PC and Raft consensus logic applies to location-update commands only
 - **Rationale**: UpdateLocation is an existing mutation with visible state effects and natural commit/abort semantics
 
-### New Components to Build
-- **`2pc.proto`** — new proto file for 2PC service definitions (Q1, Q2)
+### Added Components
+- **`twopc.proto`** — new proto file for 2PC service definitions (Q1, Q2)
 - **`raft.proto`** — new proto file for Raft service definitions (Q3, Q4)
 - **2PC coordinator/participant logic** — integrated into server nodes
 - **Raft state machine** — follower/candidate/leader roles with election and log replication
@@ -33,7 +33,7 @@ The assignment has 5 implementation questions (Q1-Q5). All use gRPC for communic
 ## Key Locked Decisions
 
 1. **Scope**: Replicated player state updates via UpdateLocation. No full game redesign.
-2. **Proto organization**: Separate `2pc.proto` and `raft.proto` files. Do NOT modify existing `fishing.proto`.
+2. **Proto organization**: Separate `twopc.proto` and `raft.proto` files. Do NOT modify existing `fishing.proto`.
 3. **Intra-node gRPC for 2PC**: Voting phase and decision phase communicate via gRPC even within the same container (assignment requirement).
 4. **Node count**: Use existing 6-node cluster topology (exceeds minimum 5).
 5. **Language**: Python (same as baseline). Assignment allows any language but Python is simplest for extending the existing code.
@@ -45,10 +45,10 @@ The assignment has 5 implementation questions (Q1-Q5). All use gRPC for communic
 | Q1 | 2PC Voting Phase | Proto + coordinator sends vote-request, participants respond vote-commit/vote-abort | COMPLETE |
 | Q2 | 2PC Decision Phase | Coordinator sends global-commit/global-abort based on votes, intra-node gRPC between phases | COMPLETE |
 | Q3 | Raft Leader Election | Proto + follower/candidate/leader state machine, RequestVote RPC, heartbeat via AppendEntries | COMPLETE |
-| Q4 | Raft Log Replication | Log entries, full log sent on heartbeat, ACK majority, client forwarding to leader | NOT STARTED |
-| Q5 | Failure Tests | 5 failure-related test cases with screenshots for report | NOT STARTED |
+| Q4 | Raft Log Replication | Log entries, full log sent on heartbeat, ACK majority, client forwarding to leader | COMPLETE |
+| Q5 | Failure Tests | 5 failure-related test cases with screenshots for report | COMPLETE |
 
-**Execute in order**: Q1 → Q2 → Q3 → Q4 → Q5. Each builds on the previous.
+**Execute in order**: Q1 → Q2 → Q3 → Q4 → Q5 → final deliverables. Each builds on the previous.
 
 ## File Layout
 
@@ -76,10 +76,6 @@ The assignment has 5 implementation questions (Q1-Q5). All use gRPC for communic
 ├── servermono/             # Alternate variant (reference only, don't extend)
 └── docs/
     ├── _INDEX.md           # Documentation topic index
-    ├── report/
-    │   ├── report.tex          # LaTeX report scaffold (may move to Overleaf later)
-    │   ├── screenshots/        # Q5 PNG screenshots — tc1_*.png … tc5_*.png go here
-    │   └── q5_failure_tests.ipynb  # Jupyter notebook: runs Q5 tests, saves screenshots
     ├── spec/
     │   ├── 00_assignment_project3.md   # Full assignment requirements (authoritative)
     │   ├── 01_repo_baseline_audit.md   # Audited baseline state
@@ -114,22 +110,16 @@ make proto        # regenerate stubs from twopc.proto and raft.proto (Q1/Q3+)
 make up           # docker compose up --build -d (6-node cluster)
 make down         # docker compose down
 make logs         # docker compose logs -f
-make pdf          # build docs/report/report.pdf (requires pdflatex on PATH)
 
 # Run client interactively (requires cluster to be up)
 cd client && python3 client.py
-
-# Run the Q5 failure-test notebook (requires Jupyter and a running cluster)
-jupyter notebook docs/report/q5_failure_tests.ipynb
 ```
 
-**Note on `make proto`:** Will fail until `server/twopc.proto` and `server/raft.proto` are created in Q1/Q3. That is expected — not a bug.
+**Note on `make proto`:** Regenerates Python stubs from the checked-in `server/twopc.proto` and `server/raft.proto` files.
 
-**Note on `make pdf`:** Requires `pdflatex` (install via `texlive-latex-base` or MacTeX). Screenshots must be placed in `docs/report/screenshots/` before building — the notebook (`q5_failure_tests.ipynb`) generates them automatically.
+**Note on the report:** The final report is maintained in Overleaf and is intentionally not versioned in this repo.
 
-**Note on the report:** `docs/report/report.tex` is the LaTeX source. Joe may move it to Overleaf later, in which case the `docs/report/` directory can be removed from the repo. Do not restructure it without Joe's approval.
-
-**Note on `make typecheck`:** Not configured. Skipped — ruff lint covers the critical checks.
+**Note on `make typecheck`:** Not configured in this repo. `ruff` linting plus `pytest` are the active quality gates via `make check`.
 
 ## RPC Logging Formats (Assignment-Required)
 
@@ -161,11 +151,11 @@ For each task, read the corresponding spec doc before implementing:
 
 ## Deliverables Checklist
 
-- [ ] Source code for 2PC (Q1+Q2)
-- [ ] Source code for Raft (Q3+Q4)
-- [ ] 5 failure test cases with screenshots (Q5)
-- [ ] README with: build/run instructions, unusual notes, external sources, GitHub link
-- [ ] Report with: team members, student IDs, work division, test screenshots, GitHub link
+- [x] Source code for 2PC (Q1+Q2)
+- [x] Source code for Raft (Q3+Q4)
+- [x] 5 failure test cases with screenshot evidence (maintained in the final report / Overleaf workflow)
+- [x] README with: build/run instructions, unusual notes, external sources, GitHub link
+- [x] Report with: team members, student IDs, work division, test screenshots, GitHub link (maintained outside the repo)
 
 ## Agent Working Rules
 
@@ -181,7 +171,7 @@ For each task, read the corresponding spec doc before implementing:
 - Unit tests should cover: state transitions, edge cases (vote-abort path, split vote, majority calculation, log index arithmetic).
 - Smoke tests should verify: containers start, nodes communicate over gRPC, RPC log output matches the required format.
 - If a test fails, fix the issue before moving on. Do not leave broken tests behind.
-- **`make typecheck`** is not yet configured. It will be added in Q1 once we write our first typed implementation files. When added, include it in `make check`.
+- **`make typecheck`** is not configured in this repo. Do not block on it; `make check` remains the active quality gate.
 
 ### Code Quality
 - `make lint` (ruff) catches import errors, unused variables, and style issues — run it early and often.

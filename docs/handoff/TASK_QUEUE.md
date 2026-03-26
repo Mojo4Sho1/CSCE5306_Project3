@@ -1,8 +1,8 @@
 # Task Queue
 
-LAST_UPDATED: 2026-03-25
-QUEUE_PHASE: implementation-in-progress
-QUEUE_POLICY: Execute tasks in order Q1 → Q2 → Q3 → Q4 → Q5. Keep one `READY: YES` task at a time.
+LAST_UPDATED: 2026-03-26
+QUEUE_PHASE: complete
+QUEUE_POLICY: Execute tasks in order Q1 → Q2 → Q3 → Q4 → Q5 → final-deliverables. When the repo is finalized, all queue entries should be `READY: DONE`.
 
 ## Queue Entry 1
 TASK_ID: q1-2pc-voting
@@ -51,11 +51,11 @@ COMPLETED: 2026-03-25
 ## Queue Entry 6
 TASK_ID: final-deliverables
 MILESTONE: DELIVERY
-OBJECTIVE: Update README with build/run instructions, fill remaining report.tex \todo{} items (student IDs, work division, AI lessons-learned section), compile PDF via Overleaf or local TeX Live, and zip/submit.
+OBJECTIVE: Finalize the repository for push: README polished, report workflow moved to Overleaf, repo-local report assets removed, and handoff/docs closed out.
 PREREQUISITES: q5-failure-tests
-READY: YES
+READY: DONE
+COMPLETED: 2026-03-26
 
 ## Queue Update Rules
-- Keep one and only one queue entry with `READY: YES`.
-- When a task completes, mark next entry as `READY: YES`.
-- `CURRENT_STATUS:ACTIVE_QUEUE_TASK_ID` must equal queue `READY: YES` `TASK_ID`.
+- During active implementation, keep one and only one queue entry with `READY: YES`.
+- When the project is fully finalized, all queue entries should be `READY: DONE`.
