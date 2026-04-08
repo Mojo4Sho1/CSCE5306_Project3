@@ -255,10 +255,18 @@ class IntraNodePhaseServicer(twopc_grpc.IntraNodePhaseServiceServicer):
     """Handles intra-node gRPC between voting and decision phases."""
 
     def ReportVote(self, request, context):
+        print(
+            f"Phase decision of Node {NODE_ID} sends RPC ReportVote"
+            f" to Phase voting of Node {NODE_ID}"
+        )
         # Q1: decision phase receives aggregated vote; Q2 will act on it
         return twopc_pb2.IntraVoteAck(acknowledged=True)
 
     def NotifyDecision(self, request, context):
+        print(
+            f"Phase voting of Node {NODE_ID} sends RPC NotifyDecision"
+            f" to Phase decision of Node {NODE_ID}"
+        )
         # Voting phase receives notification of final decision from decision phase
         return twopc_pb2.IntraDecisionAck(acknowledged=True)
 

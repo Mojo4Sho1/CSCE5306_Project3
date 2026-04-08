@@ -1,38 +1,48 @@
 # Current Status
 
-LAST_UPDATED: 2026-03-26
+LAST_UPDATED: 2026-04-08
 PROJECT_PHASE: complete
 REPO_BASELINE: forked upstream Python gRPC fishing prototype — extended with 2PC Q1+Q2 and Raft Q3+Q4+Q5
-ACTIVE_PRIMARY_OBJECTIVE: none — repository finalized for push; demo prep and oral review continue off-repo
+ACTIVE_PRIMARY_OBJECTIVE: none — compliance follow-up queue completed; repo is back to a fully closed-out state
 STATUS_SUMMARY:
 - Q1 (2PC voting phase) is COMPLETE.
 - Q2 (2PC decision phase) is COMPLETE.
 - Q3 (Raft leader election) is COMPLETE.
 - Q4 (Raft log replication) is COMPLETE.
 - Q5 (failure tests) is COMPLETE.
-- README deliverable is COMPLETE.
-- Report workflow was moved to Overleaf and is intentionally no longer stored in this repo.
-- Repo-local finalization is COMPLETE and the repository is ready to push.
-- Files created/modified this session (Q5):
-  - FIXED: server/docker-compose.yml — added PEERS env var for nodes 2-6 (was "" causing single-node election bug)
-  - REMOVED: docs/report/ — final report moved to Overleaf; repo no longer carries LaTeX/report artifacts
-  - MODIFIED: Makefile — removed repo-local PDF build target
-  - MODIFIED: README.md — polished final repo docs and added demo-oriented file map
-  - MODIFIED: AGENTS.md and docs/handoff/*.md — finalized tracking/docs for a push-ready repo
+- Final-deliverables work remains COMPLETE; the report workflow still lives outside this repo in Overleaf.
+- The three-task compliance follow-up queue is COMPLETE:
+  - `compliance-2pc-logging-audit-patch` — DONE
+  - `compliance-raft-election-state-audit-patch` — DONE
+  - `compliance-new-node-audit-wording-patch` — DONE
+- Compliance findings:
+  - 2PC: inter-node logging was already complete; intra-node receiver-side logs for `ReportVote` and `NotifyDecision` were missing and were added.
+  - Raft: failed elections previously left nodes in `candidate`; the implementation now explicitly reverts them to `follower`.
+  - Q5 wording: the repo now describes the "new node" case as late startup of a preconfigured sixth node, not dynamic membership.
+- Files created/modified this session:
+  - ARCHIVED: `docs/archive/agent_tasks/compliance_patch_scope.md`
+  - ARCHIVED: `docs/archive/agent_tasks/compliance_2pc_logging_audit_patch.md`
+  - ARCHIVED: `docs/archive/agent_tasks/compliance_raft_election_state_audit_patch.md`
+  - ARCHIVED: `docs/archive/agent_tasks/compliance_new_node_audit_wording_patch.md`
+  - MODIFIED: `server/server.py`
+  - MODIFIED: `server/raft_node.py`
+  - MODIFIED: `tests/unit/test_2pc.py`
+  - MODIFIED: `tests/unit/test_raft.py`
+  - MODIFIED: `README.md`
+  - MODIFIED: `docs/spec/06_failure_test_matrix.md`
+  - MODIFIED: `docs/handoff/OVERVIEW_CHECKLIST.md`
+  - MODIFIED: `docs/handoff/SPEC_CONFORMANCE_CHECKLIST.md`
+  - MODIFIED: `docs/handoff/TASK_QUEUE.md`
+  - MODIFIED: `docs/handoff/NEXT_TASK.md`
+  - MODIFIED: `docs/handoff/CURRENT_STATUS.md`
 QUALITY_GATES:
-- make check: PASS — 55/55 unit tests pass, ruff clean (verified 2026-03-25 before Q5 run)
-- Docker validation: ALL 5 TCs executed successfully against live 6-node cluster
+- Targeted validation: `python3 -m pytest tests/unit/test_2pc.py tests/unit/test_raft.py` PASS (36 tests)
+- make check: PASS — 57 passed, 4 deselected on 2026-04-08
 BLOCKERS: NONE
 DECISIONS_LOCKED:
-- Proto file named twopc.proto (not 2pc.proto) — Python cannot import module names starting with a digit.
-- Proto file named raft.proto (kept consistent).
-- sender_id added to ForwardRequestMessage in raft.proto for required log format (receiver side needs Node ID of sender).
-- apply_fn callback pattern: RaftServicer accepts apply_fn; stored on node so heartbeat thread (_record_ack) can call it without importing server.py.
-- ACK deduplication via set(follower_ids) per entry index — prevents double-counting across heartbeat rounds.
-- Full log sent every heartbeat; followers replace entire log (no incremental/conflict resolution).
-- wait_for_commit timeout = 5 seconds; falls back to direct apply with warning if leader steps down.
-- Project 3 scope locked to replicated player state updates via UpdateLocation.
-- PEERS must be set for ALL nodes, not only the coordinator — original config had PEERS="" for nodes 2-6.
+- Original project scope remains locked to replicated player state updates via `UpdateLocation`.
+- The compliance follow-up pass is limited to narrow audits and minimal patches; it is not a redesign pass.
+- The Q5 "new node entering the system" claim is now explicitly documented as late startup of a preconfigured node rather than dynamic membership.
 DECISIONS_PENDING: NONE
 RISKS_ACTIVE: NONE
 NEXT_TASK_ID: none
@@ -41,10 +51,12 @@ OPEN_DECISIONS_COUNT: 0
 NEXT_TASK_READY: NO
 REQUIRED_REFERENCES:
 1. `AGENTS.md` (primary agent guide)
-2. `README.md` (final repo overview and demo map)
-3. `docs/spec/00_assignment_project3.md` (assignment requirements)
+2. `README.md` (fast repo overview and demo map)
+3. `docs/archive/agent_tasks/compliance_patch_scope.md` (source scope for the completed follow-up queue)
 4. `docs/handoff/TASK_QUEUE.md`
+5. `docs/handoff/NEXT_TASK.md`
 HANDOFF_INSTRUCTIONS:
 - Read `AGENTS.md` first.
-- Use `README.md` for the fastest demo-oriented map of where the key functionality lives.
-- There is no tracked next repo task; further discussion/demo prep happens outside repo bookkeeping.
+- Read `docs/handoff/BLOCKERS.md` before starting implementation work.
+- Start with `docs/handoff/NEXT_TASK.md` to confirm there is no active queued task.
+- Use the archived `docs/archive/agent_tasks/compliance_*` briefs for the audit trail if you need to review the completed follow-up work.

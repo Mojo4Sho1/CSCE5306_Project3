@@ -204,7 +204,22 @@ def test_intra_node_report_vote_ack(intra_servicer):
 
 
 # ---------------------------------------------------------------------------
-# Test 9: coordinator calls VoteRequest on every peer
+# Test 9: intra-node ReportVote receiver log format
+# ---------------------------------------------------------------------------
+
+
+def test_intra_node_report_vote_receiver_log(intra_servicer, capsys):
+    """Decision-phase receiver logs the intra-node ReportVote call."""
+    req = twopc_pb2.IntraVoteReport(transaction_id=1, vote_commit=True)
+    intra_servicer.ReportVote(req, _mock_ctx())
+
+    captured = capsys.readouterr()
+    expected = "Phase decision of Node 1 sends RPC ReportVote to Phase voting of Node 1"
+    assert expected in captured.out
+
+
+# ---------------------------------------------------------------------------
+# Test 10: coordinator calls VoteRequest on every peer
 # ---------------------------------------------------------------------------
 
 
@@ -517,7 +532,22 @@ def test_notify_decision_intra_node_log(monkeypatch, capsys):
 
 
 # ---------------------------------------------------------------------------
-# Test 19: intra-node NotifyDecision servicer returns acknowledged=True
+# Test 19: intra-node NotifyDecision receiver log format
+# ---------------------------------------------------------------------------
+
+
+def test_intra_node_notify_decision_receiver_log(intra_servicer, capsys):
+    """Voting-phase receiver logs the intra-node NotifyDecision call."""
+    req = twopc_pb2.IntraDecisionNotification(transaction_id=1, global_commit=True)
+    intra_servicer.NotifyDecision(req, _mock_ctx())
+
+    captured = capsys.readouterr()
+    expected = "Phase voting of Node 1 sends RPC NotifyDecision to Phase decision of Node 1"
+    assert expected in captured.out
+
+
+# ---------------------------------------------------------------------------
+# Test 20: intra-node NotifyDecision servicer returns acknowledged=True
 # ---------------------------------------------------------------------------
 
 
@@ -529,7 +559,7 @@ def test_intra_node_notify_decision_ack(intra_servicer):
 
 
 # ---------------------------------------------------------------------------
-# Test 20: coordinator gates local update on global-commit
+# Test 21: coordinator gates local update on global-commit
 # ---------------------------------------------------------------------------
 
 

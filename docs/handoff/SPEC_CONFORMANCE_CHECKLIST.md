@@ -1,6 +1,6 @@
 # Spec Conformance Checklist
 
-LAST_UPDATED: 2026-03-26
+LAST_UPDATED: 2026-04-08
 
 ## Status Legend
 - `SATISFIED`
@@ -60,14 +60,14 @@ SPEC_MUST_ID: S00-M08
 SOURCE_SPEC: `docs/spec/00_assignment_project3.md`
 MUST_TEXT: 2PC RPC logging MUST follow the required assignment format.
 STATUS: SATISFIED
-OWNER_TASK_ID: q1-2pc-voting, q2-2pc-decision
-EVIDENCE: `server/server.py`, `tests/unit/test_2pc.py`, `README.md`
+OWNER_TASK_ID: q1-2pc-voting, q2-2pc-decision, compliance-2pc-logging-audit-patch
+EVIDENCE: `server/server.py` (`run_voting_phase`, `run_decision_phase`, `TwoPhaseCommitServicer`, `IntraNodePhaseServicer`), `tests/unit/test_2pc.py`, `README.md`
 
 SPEC_MUST_ID: S00-M09
 SOURCE_SPEC: `docs/spec/00_assignment_project3.md`
 MUST_TEXT: Raft leader election MUST implement follower, candidate, and leader state transitions.
 STATUS: SATISFIED
-OWNER_TASK_ID: q3-raft-election
+OWNER_TASK_ID: q3-raft-election, compliance-raft-election-state-audit-patch
 EVIDENCE: `server/raft.proto`, `server/raft_node.py`, `tests/unit/test_raft.py`
 
 SPEC_MUST_ID: S00-M10
@@ -116,8 +116,8 @@ SPEC_MUST_ID: S00-M16
 SOURCE_SPEC: `docs/spec/00_assignment_project3.md`
 MUST_TEXT: The project MUST include 5 failure-related Raft test cases.
 STATUS: SATISFIED
-OWNER_TASK_ID: q5-failure-tests
-EVIDENCE: `docs/spec/06_failure_test_matrix.md`, `docs/handoff/CURRENT_STATUS.md` (evidence captured during execution and moved to the final report workflow)
+OWNER_TASK_ID: q5-failure-tests, compliance-new-node-audit-wording-patch
+EVIDENCE: `docs/spec/06_failure_test_matrix.md`, `docs/handoff/CURRENT_STATUS.md` (evidence captured during execution and moved to the final report workflow; TC4 wording narrowed to late startup of a preconfigured node)
 
 SPEC_MUST_ID: S00-M17
 SOURCE_SPEC: `docs/spec/00_assignment_project3.md`

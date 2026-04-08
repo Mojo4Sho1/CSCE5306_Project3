@@ -1,8 +1,8 @@
 # Task Queue
 
-LAST_UPDATED: 2026-03-26
+LAST_UPDATED: 2026-04-08
 QUEUE_PHASE: complete
-QUEUE_POLICY: Execute tasks in order Q1 → Q2 → Q3 → Q4 → Q5 → final-deliverables. When the repo is finalized, all queue entries should be `READY: DONE`.
+QUEUE_POLICY: Original milestones Q1 → Q2 → Q3 → Q4 → Q5 → final-deliverables remain complete. The compliance follow-up queue completed on 2026-04-08. All queue entries should now be `READY: DONE`.
 
 ## Queue Entry 1
 TASK_ID: q1-2pc-voting
@@ -55,6 +55,39 @@ OBJECTIVE: Finalize the repository for push: README polished, report workflow mo
 PREREQUISITES: q5-failure-tests
 READY: DONE
 COMPLETED: 2026-03-26
+
+## Queue Entry 7
+TASK_ID: compliance-2pc-logging-audit-patch
+MILESTONE: COMPLIANCE
+OBJECTIVE: Audit all 2PC RPC paths for assignment-compliant sender/receiver logging, especially intra-node voting ↔ decision gRPC, and patch only missing logging.
+SOURCE_DOC: docs/archive/agent_tasks/compliance_patch_scope.md
+TASK_BRIEF: docs/archive/agent_tasks/compliance_2pc_logging_audit_patch.md
+PREREQUISITES: none
+PRIORITY: HIGH
+READY: DONE
+COMPLETED: 2026-04-08
+
+## Queue Entry 8
+TASK_ID: compliance-raft-election-state-audit-patch
+MILESTONE: COMPLIANCE
+OBJECTIVE: Audit whether failed Raft elections explicitly revert candidates to follower and patch only if needed.
+SOURCE_DOC: docs/archive/agent_tasks/compliance_patch_scope.md
+TASK_BRIEF: docs/archive/agent_tasks/compliance_raft_election_state_audit_patch.md
+PREREQUISITES: none
+PRIORITY: HIGH
+READY: DONE
+COMPLETED: 2026-04-08
+
+## Queue Entry 9
+TASK_ID: compliance-new-node-audit-wording-patch
+MILESTONE: COMPLIANCE
+OBJECTIVE: Audit whether the current “new node entering the system” scenario is true dynamic membership or a bounded preconfigured-node approximation, then patch wording/docs only as needed.
+SOURCE_DOC: docs/archive/agent_tasks/compliance_patch_scope.md
+TASK_BRIEF: docs/archive/agent_tasks/compliance_new_node_audit_wording_patch.md
+PREREQUISITES: none
+PRIORITY: MEDIUM
+READY: DONE
+COMPLETED: 2026-04-08
 
 ## Queue Update Rules
 - During active implementation, keep one and only one queue entry with `READY: YES`.

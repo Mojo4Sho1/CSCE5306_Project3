@@ -10,8 +10,8 @@ Docker cluster) with two distributed consensus algorithms:
 - **Raft** — leader election with randomised timeouts and log replication with
   majority commit (Q3 + Q4).
 - **Failure Tests** — five fault-tolerance scenarios exercising leader crash,
-  follower crash, network partition, new-node join, and split-vote re-election
-  (Q5).
+  follower crash, network partition, late startup of a preconfigured sixth
+  node, and split-vote re-election (Q5).
 
 The final written report is maintained separately in Overleaf and is
 intentionally not versioned in this repository.

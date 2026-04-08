@@ -229,12 +229,12 @@ def test_majority_vote_makes_leader():
 
 
 # ---------------------------------------------------------------------------
-# Test 11: split vote — no majority, node stays candidate
+# Test 11: split vote — no majority, node reverts to follower
 # ---------------------------------------------------------------------------
 
 
-def test_split_vote_stays_candidate():
-    """Candidate stays candidate when it does not receive a majority of votes."""
+def test_split_vote_reverts_to_follower():
+    """Candidate reverts to follower when it does not receive a majority of votes."""
     # 4 peers → total 5 nodes → need 3 votes. self-vote=1, only 1 peer grants → total 2.
     node = _node(node_id=1, peers=["fishing2:50052", "fishing3:50053", "fishing4:50054", "fishing5:50055"])
     node.role = "candidate"
@@ -258,7 +258,9 @@ def test_split_vote_stays_candidate():
         node._send_vote_requests(1, 1, node.peers)
 
     # self(1) + 1 peer grant = 2 out of 5 → not majority
-    assert node.role == "candidate"
+    assert node.role == "follower"
+    assert node.leader_id is None
+    assert node.current_term == 1
 
 
 # ---------------------------------------------------------------------------

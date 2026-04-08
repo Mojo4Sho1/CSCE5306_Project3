@@ -90,32 +90,35 @@ docker unpause fishing<node_id>
 
 **Screenshot**: Capture the pause, cluster reaction, unpause, and resynchronization.
 
-## Test Case 4: New Node Joining the Cluster
+## Test Case 4: Late Startup of a Preconfigured Sixth Node
 
-**Description**: Start a 6th node after the cluster is already running and verify it integrates as a follower.
+**Description**: Start the preconfigured 6th node after the other nodes are already running and verify it joins the existing heartbeat/log-replication flow as a follower.
 
 **Setup**:
-1. Start 5-node cluster, wait for leader election, send some updates.
+1. Start nodes `fishing1` through `fishing5`, wait for leader election, send some updates.
 
 **Action**:
 ```bash
 docker compose up -d fishing6
 ```
 
-(Requires fishing6 to be defined in docker-compose.yml but not started initially, e.g., with `profiles` or manual start.)
+This is a bounded "new node entry" interpretation, not true dynamic membership.
+`fishing6` is already defined in `server/docker-compose.yml`, and the other
+nodes already include it in their `PEERS` lists before it starts.
 
 **Expected Behavior**:
-- New node starts as a follower.
-- New node receives heartbeat from the leader within 1 second.
-- New node accepts the leader's full log via AppendEntries.
-- New node executes all committed entries to catch up.
+- The late-started node starts as a follower.
+- The leader can contact it immediately because the cluster topology was preconfigured.
+- The late-started node receives heartbeat from the leader within 1 second.
+- The late-started node accepts the leader's full log via AppendEntries.
+- The late-started node executes all committed entries to catch up.
 
 **What to Verify**:
-- New node logs show it received AppendEntries and synced log.
-- New node's state matches other nodes after sync.
-- Cluster now has 6 nodes; leader adjusts majority calculation if needed.
+- Logs for `fishing6` show it received AppendEntries and synced log.
+- `fishing6`'s state matches the already-running nodes after sync.
+- Notes/report wording make clear this is late startup of a preconfigured node, not dynamic membership.
 
-**Screenshot**: Capture the new node startup, log sync, and cluster membership.
+**Screenshot**: Capture the late startup of `fishing6`, its log sync, and the evidence that it catches up as a follower.
 
 ## Test Case 5: Split Vote and Election Retry
 

@@ -1,6 +1,6 @@
 # Overview Checklist
 
-LAST_UPDATED: 2026-03-26
+LAST_UPDATED: 2026-04-08
 PROJECT_PHASE: complete
 
 ## A. Seed and Planning
@@ -68,7 +68,7 @@ PROJECT_PHASE: complete
   - [x] TC1: Leader crash and re-election — Node 2 killed; Node 6 elected leader (term 2) in ~2-3 s
   - [x] TC2: Follower crash and recovery — Node 1 stopped; cluster continued; Node 1 synced on restart via AppendEntries
   - [x] TC3: Network partition (pause/unpause) — Node 5 (leader) paused; Node 6 elected (term 2); Node 5 stepped down on unpause after seeing higher term
-  - [x] TC4: New node joining — 5-node cluster (Node 4 leader); fishing6 added; received AppendEntries within 1 heartbeat cycle and synced
+  - [x] TC4: Late startup of preconfigured node — nodes 1-5 running first; `fishing6` started later and received AppendEntries within 1 heartbeat cycle
   - [x] TC5: Split vote and retry — Nodes 2 + 3 killed; Nodes 5 and 6 both started term-2 elections (split); Node 5 won term 3 on retry
   - [x] Failure-test evidence was captured during execution and transferred into the final report workflow
   - [x] Bug fixed: `PEERS: ""` for nodes 2-6 in docker-compose.yml — each node now has its full peer list

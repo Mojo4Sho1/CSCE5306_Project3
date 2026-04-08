@@ -237,6 +237,11 @@ class RaftNode:
             if self.role == "candidate" and self.current_term == term:
                 if votes > total_nodes / 2:
                     self._become_leader()
+                else:
+                    self.role = "follower"
+                    self.leader_id = None
+                    self.last_heartbeat_time = time.time()
+                    self.election_timeout = random.uniform(1.5, 3.0)
 
     def _become_leader(self) -> None:
         """Transition to leader. Must be called under self._lock."""
