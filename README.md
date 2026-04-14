@@ -33,7 +33,7 @@ intentionally not versioned in this repository.
 │   ├── docker-compose.yml   # 6-node Docker Compose cluster
 │   └── Dockerfile
 ├── tests/
-│   ├── unit/                # 55 unit tests (no Docker required)
+│   ├── unit/                # 65 unit tests (no Docker required)
 │   └── smoke/               # Docker integration tests
 ├── Makefile                 # Build, test, and cluster management
 └── AGENTS.md                # Full project context and architecture
@@ -58,7 +58,7 @@ make install
 # (Optional) Regenerate gRPC stubs from proto files
 make proto
 
-# Run unit tests (no Docker required) — 55 tests
+# Run unit tests (no Docker required) — 65 tests
 make test
 
 # Run the full quality gate
@@ -96,13 +96,15 @@ final report.
 
 ### Shared Setup
 
-Use three terminals for all five tests unless a test case says to restart from
-scratch.
+Use three terminals for all five tests. **Reset the cluster between each test
+case** by running `make down && make up` in Terminal 1 so every test starts
+from a clean state.
 
-**Terminal 1 — start the cluster**
+**Terminal 1 — start (or reset) the cluster**
 
 ```bash
-make up
+# First test, or reset between tests:
+make down && make up
 ```
 
 **Terminal 2 — watch cluster logs**
@@ -111,12 +113,31 @@ make up
 docker compose -f server/docker-compose.yml logs -f
 ```
 
-**Terminal 3 — open the client against a Raft path**
+> After a cluster reset, restart this command so you get a fresh log stream.
+
+**Terminal 3 — open the client**
+
+```bash
+cd client
+python3 client.py
+```
+
+By default `client.py` connects to `localhost:50051` (Node 1). Because Node 1
+is the 2PC coordinator, its `UpdateLocation` calls go through the 2PC path
+rather than Raft. To observe the Raft path instead, connect to any other node:
 
 ```bash
 cd client
 python3 -c "from client import FishingClient; FishingClient('localhost:50052').run()"
 ```
+
+> **Reconnecting after a crash:** If the node your client is connected to
+> crashes or is paused, the client may error out. Simply restart it pointing at
+> any surviving node's port (50051-50056). For example, if Node 5 was stopped,
+> reconnect to Node 2:
+> ```bash
+> python3 -c "from client import FishingClient; FishingClient('localhost:50052').run()"
+> ```
 
 Then type these client commands to confirm the cluster is alive before you
 start a failure scenario:
@@ -145,14 +166,30 @@ list_users
 
 ### How To Identify the Current Leader
 
-Watch Terminal 2 for the line:
+**Method 1 — explicit announcement.** Watch Terminal 2 for the line:
 
 ```text
 [RAFT] Node X became leader for term Y
 ```
 
-That node is the current leader. When a test says "stop the leader" or "pause
-the leader", substitute the node number you saw in that message.
+**Method 2 — heartbeat pattern.** The leader sends `AppendEntries` to every
+other node once per second. In the log stream you will quickly notice one node
+that is always the *sender*:
+
+```text
+server-fishing2-1  | Node 2 runs RPC AppendEntries called by Node 6
+server-fishing6-1  | Node 6 sends RPC AppendEntries to Node 3
+server-fishing3-1  | Node 3 runs RPC AppendEntries called by Node 6
+server-fishing6-1  | Node 6 sends RPC AppendEntries to Node 4
+server-fishing4-1  | Node 4 runs RPC AppendEntries called by Node 6
+```
+
+In this example, Node 6 is the leader — it is the node sending `AppendEntries`
+to all other nodes, while the other nodes are receiving and running those RPCs.
+
+Throughout the test cases below, replace `<leader_id>` with the leader's node
+number (e.g., `6` in the example above). Similarly, replace `<follower_id>`
+with any node that is **not** the current leader.
 
 ### Common Commands
 
@@ -183,9 +220,10 @@ docker compose -f server/docker-compose.yml up -d fishing6
 The cluster can survive loss of the current leader and elect a replacement.
 
 **Setup:**
-1. Start the cluster and open the client using the shared setup above.
-2. Identify the current leader from the `became leader` log line.
-3. Send at least two location updates from the client before crashing the
+1. Reset the cluster: `make down && make up` (restart log stream in Terminal 2).
+2. Open the client (see Shared Setup).
+3. Identify the current leader from the `became leader` log line.
+4. Send at least two location updates from the client before crashing the
    leader.
 
 **Action:**
@@ -226,10 +264,10 @@ The cluster continues operating with one follower down, and the restarted
 follower catches up from the leader.
 
 **Setup:**
-1. Start from a healthy cluster with an identified leader.
-2. Use the client to send several updates first so the leader has entries to
-   replicate.
-3. Choose a follower that is not the current leader.
+1. Reset the cluster: `make down && make up` (restart log stream in Terminal 2).
+2. Open the client and identify the current leader.
+3. Send several updates so the leader has entries to replicate.
+4. Choose a follower that is not the current leader.
 
 **Action:**
 1. Stop the follower:
@@ -283,8 +321,9 @@ if it returns stale.
 partition handling and re-election clearly.
 
 **Setup:**
-1. Start from a healthy cluster and identify the current leader.
-2. Send a few client updates first.
+1. Reset the cluster: `make down && make up` (restart log stream in Terminal 2).
+2. Open the client and identify the current leader.
+3. Send a few client updates first.
 
 **Action:**
 1. Pause the leader container:
@@ -373,8 +412,8 @@ The cluster can go through multiple election rounds before a leader is finally
 chosen.
 
 **Setup:**
-1. Start clean with a healthy cluster.
-2. Identify the current leader.
+1. Reset the cluster: `make down && make up` (restart log stream in Terminal 2).
+2. Open the client and identify the current leader.
 3. Pick one additional follower to stop at the same time as the leader.
 
 **Action:**
