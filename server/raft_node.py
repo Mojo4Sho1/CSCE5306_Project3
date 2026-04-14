@@ -41,8 +41,11 @@ class LogEntry:
 
 
 def _parse_operation(operation: str):
-    """Parse 'UpdateLocation:jwt:x:y' → (jwt, x, y). Returns None on parse error."""
-    parts = operation.split(":", 3)
+    """Parse 'UpdateLocation|jwt|x|y' → (jwt, x, y). Returns None on parse error.
+
+    Uses '|' as delimiter because JWT tokens contain colons (e.g. 'user:pass').
+    """
+    parts = operation.split("|", 3)
     if len(parts) != 4 or parts[0] != "UpdateLocation":
         return None
     try:
@@ -207,6 +210,11 @@ class RaftNode:
         votes = 1  # self-vote already counted
         total_nodes = len(peers) + 1
 
+        # Snapshot log state for the log-freshness check (Raft §5.4.1)
+        with self._lock:
+            last_log_index = self.log[-1].index if self.log else 0
+            last_log_term = self.log[-1].term if self.log else 0
+
         for peer in peers:
             pid = peer_node_id(peer)
             print(f"Node {candidate_id} sends RPC RequestVote to Node {pid}")
@@ -217,8 +225,8 @@ class RaftNode:
                     raft_pb2.RequestVoteRequest(
                         term=term,
                         candidate_id=candidate_id,
-                        last_log_index=0,
-                        last_log_term=0,
+                        last_log_index=last_log_index,
+                        last_log_term=last_log_term,
                     ),
                     timeout=1.0,
                 )
@@ -227,6 +235,7 @@ class RaftNode:
                         self.current_term = resp.term
                         self.role = "follower"
                         self.voted_for = None
+                        self.last_heartbeat_time = time.time()
                         return
                 if resp.vote_granted:
                     votes += 1
@@ -296,6 +305,7 @@ class RaftNode:
                             self.current_term = resp.term
                             self.role = "follower"
                             self.voted_for = None
+                            self.last_heartbeat_time = time.time()
                             return
                         if resp.success and self.role == "leader":
                             self._record_ack(resp.follower_id)
@@ -339,6 +349,24 @@ class RaftServicer(raft_pb2_grpc.RaftServiceServicer):
                 node.current_term = request.term
                 node.role = "follower"
                 node.voted_for = None
+
+            # Log-freshness check (Raft §5.4.1): reject if candidate's log
+            # is less up-to-date than ours.
+            my_last_term = node.log[-1].term if node.log else 0
+            my_last_index = node.log[-1].index if node.log else 0
+            candidate_up_to_date = (
+                request.last_log_term > my_last_term
+                or (
+                    request.last_log_term == my_last_term
+                    and request.last_log_index >= my_last_index
+                )
+            )
+            if not candidate_up_to_date:
+                return raft_pb2.RequestVoteResponse(
+                    term=node.current_term,
+                    vote_granted=False,
+                    voter_id=node.node_id,
+                )
 
             # Grant vote if we haven't voted or already voted for this candidate
             if node.voted_for is None or node.voted_for == request.candidate_id:
@@ -418,7 +446,7 @@ class RaftServicer(raft_pb2_grpc.RaftServiceServicer):
 
         if is_leader:
             # This node is the leader — append to log and wait for commit
-            operation = f"UpdateLocation:{request.user_jwt}:{request.x}:{request.y}"
+            operation = f"UpdateLocation|{request.user_jwt}|{request.x}|{request.y}"
             with node._lock:
                 index = node.append_log_entry(operation)
             committed = node.wait_for_commit(index)

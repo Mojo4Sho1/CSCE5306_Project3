@@ -76,6 +76,16 @@ def test_update_location_stores_coords(servicer, fresh_state):
     assert users[0].y == pytest.approx(20.0)
 
 
+def test_upsert_user_location_creates_missing_user(fresh_state):
+    """Replicated updates can materialize a user record on a node that lacked it."""
+    fresh_state.upsert_user_location("alice:secret", 4.0, 9.0)
+
+    users = fresh_state.get_user_snapshot()
+    assert len(users) == 1
+    assert users[0].x == pytest.approx(4.0)
+    assert users[0].y == pytest.approx(9.0)
+
+
 # ---------------------------------------------------------------------------
 # Test 4: remove_user clears both users and inventory
 # 2PC abort path must be able to roll back a committed UpdateLocation —

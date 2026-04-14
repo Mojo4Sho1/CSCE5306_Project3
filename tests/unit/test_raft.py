@@ -323,3 +323,174 @@ def test_append_entries_receiver_log_format(capsys):
 
     captured = capsys.readouterr()
     assert "Node 3 runs RPC AppendEntries called by Node 1" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# Test 15: Leader step-down via heartbeat response resets heartbeat timer
+# ---------------------------------------------------------------------------
+
+
+def test_leader_stepdown_via_heartbeat_resets_timer():
+    """When a leader steps down after receiving a higher-term AppendEntries
+    response in _heartbeat_loop, last_heartbeat_time must be reset to prevent
+    the election timer from firing immediately."""
+    node = _node(node_id=1, peers=["fishing2:50052"])
+    node.role = "leader"
+    node.current_term = 1
+    node.leader_id = 1
+    # Simulate the pre-pause state: heartbeat time is far in the past
+    node.last_heartbeat_time = time.time() - 30.0
+
+    # Mock the gRPC call so AppendEntries returns a higher term
+    mock_stub = MagicMock()
+    mock_stub.AppendEntries.return_value = raft_pb2.AppendEntriesResponse(
+        term=3, success=False, follower_id=2
+    )
+
+    with patch("grpc.insecure_channel"), patch.object(
+        raft_pb2_grpc, "RaftServiceStub", return_value=mock_stub
+    ):
+        # Run a single heartbeat iteration (exits after step-down)
+        node._heartbeat_loop()
+
+    assert node.role == "follower"
+    assert node.current_term == 3
+    # Critical: heartbeat timer was reset, so elapsed time is small
+    assert (time.time() - node.last_heartbeat_time) < 1.0
+
+
+# ---------------------------------------------------------------------------
+# Test 16: Leader step-down via vote response resets heartbeat timer
+# ---------------------------------------------------------------------------
+
+
+def test_leader_stepdown_via_vote_response_resets_timer():
+    """When a candidate steps down after receiving a higher-term RequestVote
+    response, last_heartbeat_time must be reset."""
+    node = _node(node_id=1, peers=["fishing2:50052"])
+    node.role = "candidate"
+    node.current_term = 1
+    node.voted_for = 1
+    node.last_heartbeat_time = time.time() - 30.0
+
+    mock_stub = MagicMock()
+    mock_stub.RequestVote.return_value = raft_pb2.RequestVoteResponse(
+        term=5, vote_granted=False, voter_id=2
+    )
+
+    with patch("grpc.insecure_channel"), patch.object(
+        raft_pb2_grpc, "RaftServiceStub", return_value=mock_stub
+    ):
+        node._send_vote_requests(1, 1, ["fishing2:50052"])
+
+    assert node.role == "follower"
+    assert node.current_term == 5
+    assert (time.time() - node.last_heartbeat_time) < 1.0
+
+
+# ---------------------------------------------------------------------------
+# Test 17: RequestVote rejects candidate with stale log
+# ---------------------------------------------------------------------------
+
+
+def test_request_vote_rejects_stale_log():
+    """RequestVote rejects a candidate whose log is less up-to-date than the voter's."""
+    from raft_node import LogEntry
+
+    node = _node(node_id=2)
+    node.current_term = 2
+    # Voter has a log entry at index 1, term 2
+    node.log = [LogEntry(operation="UpdateLocation|u|1.0|2.0", term=2, index=1)]
+    servicer = RaftServicer(node)
+
+    # Candidate claims term 3 but has an empty log (last_log_index=0, last_log_term=0)
+    req = raft_pb2.RequestVoteRequest(
+        term=3, candidate_id=1, last_log_index=0, last_log_term=0
+    )
+    resp = servicer.RequestVote(req, _mock_ctx())
+
+    assert resp.vote_granted is False
+    # Node updated its term (higher term causes step-down) but rejected the vote
+    assert node.current_term == 3
+
+
+# ---------------------------------------------------------------------------
+# Test 18: RequestVote grants vote when candidate log is up-to-date
+# ---------------------------------------------------------------------------
+
+
+def test_request_vote_grants_vote_when_log_up_to_date():
+    """RequestVote grants a vote when the candidate's log is at least as up-to-date."""
+    from raft_node import LogEntry
+
+    node = _node(node_id=2)
+    node.current_term = 2
+    node.log = [LogEntry(operation="UpdateLocation|u|1.0|2.0", term=2, index=1)]
+    servicer = RaftServicer(node)
+
+    # Candidate has a longer log at the same term
+    req = raft_pb2.RequestVoteRequest(
+        term=3, candidate_id=1, last_log_index=2, last_log_term=2
+    )
+    resp = servicer.RequestVote(req, _mock_ctx())
+
+    assert resp.vote_granted is True
+    assert node.voted_for == 1
+
+
+# ---------------------------------------------------------------------------
+# Test 19: RequestVote grants vote when candidate has higher last log term
+# ---------------------------------------------------------------------------
+
+
+def test_request_vote_grants_vote_higher_log_term():
+    """A candidate with a higher last log term wins, regardless of log length."""
+    from raft_node import LogEntry
+
+    node = _node(node_id=2)
+    node.current_term = 2
+    node.log = [
+        LogEntry(operation="UpdateLocation|u|1.0|2.0", term=1, index=1),
+        LogEntry(operation="UpdateLocation|u|3.0|4.0", term=1, index=2),
+    ]
+    servicer = RaftServicer(node)
+
+    # Candidate has only 1 entry but at a higher term
+    req = raft_pb2.RequestVoteRequest(
+        term=3, candidate_id=1, last_log_index=1, last_log_term=2
+    )
+    resp = servicer.RequestVote(req, _mock_ctx())
+
+    assert resp.vote_granted is True
+
+
+# ---------------------------------------------------------------------------
+# Test 20: Stale leader cannot immediately re-elect after step-down
+# ---------------------------------------------------------------------------
+
+
+def test_stale_leader_no_immediate_reelection():
+    """Simulate the TC3 scenario: a leader that was paused steps down on seeing
+    a higher term, and does NOT immediately trigger a new election because its
+    heartbeat timer was reset."""
+    node = _node(node_id=4, peers=["fishing1:50051", "fishing2:50052", "fishing3:50053"])
+    node.role = "leader"
+    node.current_term = 1
+    node.leader_id = 4
+    # Simulate being paused for 10 seconds
+    node.last_heartbeat_time = time.time() - 10.0
+
+    # Step down via AppendEntries from new leader at term 2
+    servicer = RaftServicer(node)
+    req = raft_pb2.AppendEntriesRequest(term=2, leader_id=1, entries=[], commit_index=0)
+    servicer.AppendEntries(req, _mock_ctx())
+
+    assert node.role == "follower"
+    assert node.current_term == 2
+    assert node.leader_id == 1
+    # Timer was reset by AppendEntries handler
+    assert (time.time() - node.last_heartbeat_time) < 1.0
+
+    # Now check: the election timer should NOT fire because elapsed < election_timeout
+    elapsed = time.time() - node.last_heartbeat_time
+    assert elapsed < node.election_timeout

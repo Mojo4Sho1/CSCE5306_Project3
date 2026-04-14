@@ -60,6 +60,19 @@ class ServerState:
                 u.x = x
                 u.y = y
 
+    def upsert_user_location(self, jwt, x, y):
+        """Create the user if needed, then apply the location update."""
+        with self.lock:
+            if jwt not in self.users:
+                uid = self.user_id_seq
+                self.user_id_seq += 1
+                self.users[jwt] = pb.User(id=uid, x=0.0, y=0.0, is_fishing=False)
+                self.inventory.setdefault(jwt, [])
+
+            u = self.users[jwt]
+            u.x = x
+            u.y = y
+
     def remove_user(self, jwt):
         with self.lock:
             self.users.pop(jwt, None)
@@ -240,7 +253,7 @@ class TwoPhaseCommitServicer(twopc_grpc.TwoPhaseCommitServiceServicer):
         )
         if request.global_commit:
             upd = request.update
-            state.update_user(upd.user_jwt, upd.x, upd.y)
+            state.upsert_user_location(upd.user_jwt, upd.x, upd.y)
             applied = True
         else:
             applied = False
@@ -291,7 +304,7 @@ def _raft_update_location(jwt: str, x: float, y: float) -> None:
 
     if role == "leader":
         with raft_node._lock:
-            index = raft_node.append_log_entry(f"UpdateLocation:{jwt}:{x}:{y}")
+            index = raft_node.append_log_entry(f"UpdateLocation|{jwt}|{x}|{y}")
         committed = raft_node.wait_for_commit(index)
         if not committed:
             print(f"[RAFT] Commit timeout for index {index}; applying locally as fallback")
@@ -301,7 +314,7 @@ def _raft_update_location(jwt: str, x: float, y: float) -> None:
         try:
             channel = grpc.insecure_channel(leader_addr)
             stub = raft_grpc.RaftServiceStub(channel)
-            stub.ForwardRequest(
+            resp = stub.ForwardRequest(
                 raft_pb2.ForwardRequestMessage(
                     user_jwt=jwt,
                     x=x,
@@ -310,6 +323,10 @@ def _raft_update_location(jwt: str, x: float, y: float) -> None:
                 ),
                 timeout=6.0,
             )
+            if resp.success:
+                # Apply locally so reads on this node are immediately consistent
+                # (don't wait for next heartbeat to propagate commit_index)
+                state.upsert_user_location(jwt, x, y)
         except grpc.RpcError as exc:
             print(f"[RAFT] ForwardRequest to leader failed: {exc}; applying locally")
             state.update_user(jwt, x, y)
@@ -356,13 +373,13 @@ class FishingService(grpc_stub.FishingServiceServicer):
                 votes = run_voting_phase(req.jwt, req.x, req.y, tx_id)
                 global_commit = run_decision_phase(req.jwt, req.x, req.y, tx_id, votes)
                 if global_commit:
-                    state.update_user(jwt, req.x, req.y)
+                    state.upsert_user_location(jwt, req.x, req.y)
             elif raft_node is not None:
                 # Q4 Raft path: route through log replication
                 _raft_update_location(req.jwt, req.x, req.y)
             else:
                 # Fallback (raft not yet initialised — shouldn't happen in prod)
-                state.update_user(jwt, req.x, req.y)
+                state.upsert_user_location(jwt, req.x, req.y)
 
         # No explicit call to cleanup() is needed – it will run automatically.
         return pb.UpdateLocationResponse(success=True)
@@ -439,7 +456,7 @@ def serve(port=50051, image_path="image.jpg"):  # <- accept an image path
     peers = [p.strip() for p in PEERS_STR.split(",") if p.strip()]
     raft_node = raft_mod.RaftNode(node_id=NODE_ID, peers=peers)
     raft_grpc.add_RaftServiceServicer_to_server(
-        raft_mod.RaftServicer(raft_node, apply_fn=state.update_user), server
+        raft_mod.RaftServicer(raft_node, apply_fn=state.upsert_user_location), server
     )
 
     # Use the supplied port instead of hard‑coding it

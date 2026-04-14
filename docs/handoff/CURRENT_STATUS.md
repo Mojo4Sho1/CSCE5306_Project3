@@ -19,6 +19,7 @@ STATUS_SUMMARY:
   - 2PC: inter-node logging was already complete; intra-node receiver-side logs for `ReportVote` and `NotifyDecision` were missing and were added.
   - Raft: failed elections previously left nodes in `candidate`; the implementation now explicitly reverts them to `follower`.
   - Q5 wording: the repo now describes the "new node" case as late startup of a preconfigured sixth node, not dynamic membership.
+- Independent re-verification against live repo state at commit `449a00a` found no remaining gaps in the three-item compliance queue, so no further code or wording repair was required.
 - Files created/modified this session:
   - ARCHIVED: `docs/archive/agent_tasks/compliance_patch_scope.md`
   - ARCHIVED: `docs/archive/agent_tasks/compliance_2pc_logging_audit_patch.md`
@@ -36,8 +37,9 @@ STATUS_SUMMARY:
   - MODIFIED: `docs/handoff/NEXT_TASK.md`
   - MODIFIED: `docs/handoff/CURRENT_STATUS.md`
 QUALITY_GATES:
+- Independent re-verification: `make test` PASS — 57 passed, 4 deselected on 2026-04-08
 - Targeted validation: `python3 -m pytest tests/unit/test_2pc.py tests/unit/test_raft.py` PASS (36 tests)
-- make check: PASS — 57 passed, 4 deselected on 2026-04-08
+- make check: PASS — 57 passed, 4 deselected on 2026-04-08 (reconfirmed during independent verification)
 BLOCKERS: NONE
 DECISIONS_LOCKED:
 - Original project scope remains locked to replicated player state updates via `UpdateLocation`.
