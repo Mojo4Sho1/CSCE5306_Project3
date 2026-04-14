@@ -253,9 +253,6 @@ list_users
 - The cluster resumes `AppendEntries` from the new leader.
 - The client still accepts updates after re-election.
 
-**Screenshot to capture:**  
-Capture the old leader stop command, the election logs, the new leader log line,
-and a successful client update after failover.
 
 ### TC2 — Follower Crash and Recovery
 
@@ -307,9 +304,6 @@ docker compose -f server/docker-compose.yml start fishing4
 - Client updates still succeed while the follower is down.
 - After restart, the follower resumes receiving `AppendEntries` and catches up.
 
-**Screenshot to capture:**  
-Capture the follower stop, successful updates while it is down, and the
-restarted follower receiving `AppendEntries` again.
 
 ### TC3 — Temporary Network Partition
 
@@ -366,9 +360,6 @@ docker unpause server-fishing5-1
   receiving `AppendEntries` from the new leader.
 - Only one leader remains active.
 
-**Screenshot to capture:**  
-Capture the pause command, the re-election logs, the unpause command, and the
-old leader rejoining as a follower.
 
 ### TC4 — Late Startup of a Preconfigured Sixth Node
 
@@ -401,9 +392,6 @@ docker compose -f server/docker-compose.yml up -d fishing6
   `AppendEntries` from the current leader.
 - `fishing6` catches up to the cluster state as a follower.
 
-**Screenshot to capture:**  
-Capture the startup of `fishing6`, the first `AppendEntries` it receives, and
-evidence that it joined as a follower rather than becoming leader.
 
 ### TC5 — Split Vote and Election Retry
 
@@ -440,9 +428,6 @@ docker compose -f server/docker-compose.yml stop fishing1 fishing5
 - If the election resolves too quickly and you do not capture multiple rounds,
   restart the cluster and repeat the scenario.
 
-**Screenshot to capture:**  
-Capture the simultaneous stop command, multiple `RequestVote` rounds or terms,
-and the final leader selection.
 
 ---
 
